@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "decatho_provider_app",
-    "slug": "decatho_provider_app",
+    "name": "Docatho Partner",
+    "slug": "docatho-partner",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/icon.png",
-    "scheme": "decathoproviderapp",
+    "scheme": "docathopartnerapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "jsEngine": "hermes",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.astroglobal.app",
+      "bundleIdentifier": "com.docathopartner.app",
       "config": {
         "usesNonExemptEncryption": false
       },
@@ -40,8 +40,7 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ],
-      "package": "com.astroglobal.app",
-      "googleServicesFile": null
+      "package": "com.docathopartner.app"
     },
     "web": {
       "bundler": "metro",
@@ -87,9 +86,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "608f79a9-042b-42c1-8403-08f24e67e6bf"
+        "projectId": "9b42c393-b993-4f64-9075-077d8b12aff0"
       }
     },
-    "owner": "astroglobal"
+    "owner": "nuvylabs"
   }
 }

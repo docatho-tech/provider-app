@@ -1,20 +1,14 @@
-import { iProfile } from '@/interfaces/account'
-import { iUserAppConfigs } from '@/interfaces/authentications'
 import type { PayloadAction } from '@reduxjs/toolkit'
 import { createSlice } from '@reduxjs/toolkit'
 
 // Define a type for the slice state
-interface CounterState {
+interface AuthenticationState {
   isLoggedIn: boolean
-  profileDetails: iProfile | null
-  userAppConfigs: iUserAppConfigs | null
 }
 
 // Define the initial state using that type
-const initialState: CounterState = {
+const initialState: AuthenticationState = {
   isLoggedIn: false,
-  profileDetails: null,
-  userAppConfigs: null
 }
 
 export const authenticationSlice = createSlice({

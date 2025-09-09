@@ -1,13 +1,11 @@
 import { configureStore } from '@reduxjs/toolkit'
 import authenticationReducer from './slices/authenticationSlice'
 import commonReducer from './slices/commonSlice'
-import shopAttributesReducer from './slices/shopSlice'
 
 export const store = configureStore({
   reducer: {
     authentication: authenticationReducer,
     common: commonReducer,
-    shopAttributes: shopAttributesReducer,
   },
 })
 

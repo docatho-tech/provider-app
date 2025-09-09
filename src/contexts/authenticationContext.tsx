@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from "@/constants/base";
-import { useAppDispatch, useAppSelector } from "@/hooks/useStoreHooks";
+import { useAppDispatch } from "@/hooks/useStoreHooks";
 import StorageService from "@/utils/storage";
 import { RelativePathString, SplashScreen, useRouter } from "expo-router";
 import { createContext, PropsWithChildren, useEffect, useState } from "react";
@@ -25,7 +25,7 @@ const AuthProvider = ({ children }: PropsWithChildren) => {
   const [isReady, setIsReady] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
-  const userAppConfigs = useAppSelector((state) => state.authentication.userAppConfigs);
+  // const userAppConfigs = useAppSelector((state) => state.authentication.userAppConfigs);
 
   useEffect(() => {
     const getTokenFromStorage = async () => {
@@ -46,15 +46,9 @@ const AuthProvider = ({ children }: PropsWithChildren) => {
 
   useEffect(() => {    
     if (isReady) {
-      if(!userAppConfigs) {
-        SplashScreen.hideAsync();
-      }
-      
-      if(userAppConfigs !== null && ("is_onboarding_completed" in userAppConfigs)) {
-        SplashScreen.hideAsync();
-      }
+      SplashScreen.hideAsync();
     }
-  }, [isReady, userAppConfigs]);
+  }, [isReady]);
 
   const login = async (accessToken: string, refreshToken: string, redirectTo : string | undefined) => {
     try {
