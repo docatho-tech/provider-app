@@ -59,6 +59,12 @@ const OrderSuccess = () => {
         backgroundColor: '#D0EBD7'
       }
     }
+    if(status === 'cancelled') {
+      return {
+        color: '#FF0000',
+        backgroundColor: '#FFE5E5'
+      }
+    }
     return {
       color: '#313131',
       backgroundColor: 'rgba(49, 49, 49, 0.1)'

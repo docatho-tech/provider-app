@@ -1,19 +1,26 @@
 import { Colors } from "@/constants/Colors";
 import Images from "@/constants/Images";
 import useCustomSafeAreaInsets from "@/hooks/useCustomSafeAreaInsets";
+import { useAppDispatch, useAppSelector } from "@/hooks/useStoreHooks";
+import { getProfileDetails } from "@/store/slices/authenticationSlice";
 import { Entypo } from "@expo/vector-icons";
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { router } from "expo-router";
-import React from 'react';
+import { RelativePathString, router } from "expo-router";
+import React, { useEffect } from 'react';
 import { Image, Pressable, Text, TouchableOpacity, View } from "react-native";
 
 export const HomeHeader = ({ name, profilePicture }: { name: string, profilePicture?: string }) => {
   const {top} = useCustomSafeAreaInsets();
+  const dispatch = useAppDispatch();
+  const profileResponse = useAppSelector((state) => state.authentication.profile);
 
+  useEffect(() => {
+    dispatch(getProfileDetails());
+  }, []);
 
   return (
     <View className="flex-row items-center justify-between bg-primary px-[5%] pb-[20px] rounded-b-[20px]" style={{ paddingTop: top }}>
-      <Text className="text-[20px] text-white font-semibold w-[60%]" numberOfLines={1}> Hey! {name} 👋 </Text>
+      <Text className="text-[20px] text-white font-semibold w-[60%]" numberOfLines={1}> Hey! {profileResponse?.name || 'User'} 👋 </Text>
 
       <View className="flex-row items-center gap-x-[20px]">
         <Pressable>
@@ -31,19 +38,19 @@ export const HomeHeader = ({ name, profilePicture }: { name: string, profilePict
   )
 }
 
-export const HeaderWithBackButton = ({ routeName, backgroundColor = "transparent" }: { routeName: string, backgroundColor?: string }) => {
+export const HeaderWithBackButton = ({ routeName, backButtonRoute, backgroundColor = "transparent" }: { routeName: string, backButtonRoute?: string, backgroundColor?: string }) => {
   const {top} = useCustomSafeAreaInsets();  
   return (
     <View className='flex-row items-center justify-between px-[5%] pb-[10px]' style={{ paddingTop: top, backgroundColor: backgroundColor || "transparent" }}>
-      <HeaderLeftStandard routeName={routeName} />
+      <HeaderLeftStandard backButtonRoute={backButtonRoute} routeName={routeName} />
     </View>
   )
 }
 
-export const HeaderLeftStandard = ({ routeName, showBackButton = true, backgroundColor = "transparent" }: { routeName: string, showBackButton?: boolean, backgroundColor?: string }) => {
+export const HeaderLeftStandard = ({ routeName, backButtonRoute, showBackButton = true, backgroundColor = "transparent" }: { routeName: string, backButtonRoute?: string, showBackButton?: boolean, backgroundColor?: string }) => {
   return (
     <View className='flex-row items-center gap-x-[10px]' style={{ backgroundColor: backgroundColor || "transparent" }}>
-      <TouchableOpacity onPress={() => router.back()}>
+      <TouchableOpacity onPress={() => backButtonRoute ? router.push(backButtonRoute as RelativePathString) : router.back()}>
         {showBackButton && <Entypo name="chevron-thin-left" size={20} color={Colors.primaryTextColor} />}
       </TouchableOpacity>
 

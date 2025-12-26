@@ -11,7 +11,7 @@ const WithHeaderLayout = () => {
           name="orders/[orderId]"
           options={{
             headerShown: true,
-            header: () => <HeaderLeftStandard routeName="Order Details" />
+            header: () => <HeaderLeftStandard routeName="Order Details" backButtonRoute="/" />
           }}
         />
       </Stack>
