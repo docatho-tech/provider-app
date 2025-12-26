@@ -36,7 +36,7 @@ export default authenticationSlice.reducer
 //   standardInstance.interceptors.request.use(async (config) => {
 //     const accessToken = await StorageService.getItem(STORAGE_KEYS.ACCESS_TOKEN)
 //     if(accessToken) {
-//       config.headers.Authorization = `Bearer ${accessToken}`
+//       config.headers.Authorization = `Token ${accessToken}`
 //     }
 //     return config
 //   })

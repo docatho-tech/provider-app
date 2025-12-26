@@ -69,8 +69,6 @@ const CustomFlatList = <T,>({
     }
   }
 
-  if(!data.length) 
-    return null;
   return (
     <FlatList
       {...extraProps as FlatListProps<T>}

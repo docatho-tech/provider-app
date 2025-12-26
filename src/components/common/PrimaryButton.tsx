@@ -1,5 +1,6 @@
 import React from 'react'
-import { ActivityIndicator, Text, TouchableOpacity } from 'react-native'
+import { ActivityIndicator, TouchableOpacity } from 'react-native'
+import ThemedText from './ThemedText'
 
 interface PrimaryButtonProps {
   onPress?: () => void
@@ -15,11 +16,11 @@ const PrimaryButton = ({ title, startIcon, endIcon, onPress = undefined, classNa
   return (
     <TouchableOpacity
       onPress={onPress ? onPress : undefined}
-      className={`w-full bg-primary text-white flex justify-center items-center h-[50px] rounded-[8px] mt-[20px] flex-row gap-3 ${className} ${disabled ? 'opacity-50' : ''}`}
+      className={`w-full bg-primary text-white flex font-extralight justify-center items-center h-[40px] rounded-default flex-row gap-3 ${className} ${disabled ? 'opacity-50' : ''}`}
       disabled={disabled}
     >
       {startIcon && startIcon}
-      <Text className='text-white text-[18px] font-semibold ml-2'>{title}</Text>
+      <ThemedText size='standard' className='font-semibold text-white ml-2'>{title}</ThemedText>
       {endIcon && endIcon}
       {loading && <ActivityIndicator color={'white'} animating={loading} />}
     </TouchableOpacity>

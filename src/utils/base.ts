@@ -9,15 +9,22 @@ export const fetchImageFromUri = async (uri : string, fileName : string) => {
   return file;
 };
 
-export const getFormattedDate = (date : Date | string) => {
+export const getFormattedDate = (date : Date | string, format : 'DD-MM-YYYY' | 'YYYY-MM-DD' = 'DD-MM-YYYY') => {
   if (!date) return '';
-  
-  // The format will be 03-May-2025
+
   const dateObj = new Date(date);
   const day = dateObj.getDate();
-  const month = dateObj.toLocaleString('default', { month: 'short' });
+  const month = dateObj.toLocaleString('default', { month: 'numeric' });
   const year = dateObj.getFullYear();
-  return `${day}-${month}-${year}`;
+
+  switch (format) {
+    case 'DD-MM-YYYY':
+      return `${day}-${month}-${year}`;
+    case 'YYYY-MM-DD':
+      return `${year}-${month}-${day}`;
+    default:
+      return `${day}-${month}-${year}`;
+  } 
 }
 
 export const replaceUrlParams = (url : string, params : Record<string, string | number>) => {

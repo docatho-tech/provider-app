@@ -4,7 +4,6 @@
     "slug": "docatho-partner",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./src/assets/images/icon.png",
     "scheme": "docathopartnerapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -21,9 +20,9 @@
         }
       },
       "icon": {
-        "light": "./src/assets/images/icon.png",
-        "dark": "./src/assets/images/icon.png",
-        "tinted": "./src/assets/images/icon.png"
+        "light": "./src/assets/images/ios-icon.png",
+        "dark": "./src/assets/images/ios-icon.png",
+        "tinted": "./src/assets/images/ios-icon.png"
       }
     },
     "android": {
@@ -32,7 +31,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/adaptive-icon.png",
         "monochromeImage": "./src/assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#064CBD"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
@@ -59,9 +58,9 @@
             "image": "./src/assets/images/Splash.png",
             "imageWidth": 200,
             "resizeMode": "contain",
-            "backgroundColor": "#FCFCF1"
+            "backgroundColor": "#064CBD"
           },
-          "backgroundColor": "#FCFCF1"
+          "backgroundColor": "#064CBD"
         }
       ],
       [

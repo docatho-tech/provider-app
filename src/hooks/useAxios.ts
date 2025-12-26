@@ -138,7 +138,7 @@ const useAxios = <T>(
     instance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });
@@ -169,7 +169,7 @@ const useAxios = <T>(
     instance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });
@@ -199,7 +199,7 @@ const useAxios = <T>(
     fileInstance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });
@@ -225,7 +225,7 @@ const useAxios = <T>(
     instance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });
@@ -254,7 +254,7 @@ const useAxios = <T>(
     instance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });
@@ -281,7 +281,7 @@ const useAxios = <T>(
     instance.interceptors.request.use(async (config) => {
       const accessToken = await getAccessToken();
       if (accessToken) {
-        config.headers.Authorization = `Bearer ${accessToken}`;
+        config.headers.Authorization = `Token ${accessToken}`;
       }
       return config;
     });

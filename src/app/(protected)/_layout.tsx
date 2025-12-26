@@ -38,6 +38,7 @@ export default function ProtectedRootLayout() {
     <Stack>
       <Stack.Screen name="(headerless)" options={{ headerShown: false }} />
       <Stack.Screen name="(withheader)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
     </Stack>
   );
 }

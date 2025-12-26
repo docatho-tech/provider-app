@@ -9,6 +9,7 @@ import {
 } from '@gorhom/bottom-sheet';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-get-random-values';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -30,8 +31,11 @@ export default function RootLayout() {
               <LoadingProvider>
                 <AuthProvider>
                   <Stack>
+                    <Stack.Screen name="login" options={{ headerShown: false }} />
+                    <Stack.Screen name="otp" options={{ headerShown: false }} />
                     <Stack.Screen name="(protected)" options={{ headerShown: false }} />
                   </Stack>
+                  <StatusBar style={'light'} />
                 </AuthProvider>
               </LoadingProvider>
             </ToastProvider>
