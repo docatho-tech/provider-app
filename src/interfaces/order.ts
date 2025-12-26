@@ -44,3 +44,23 @@ export interface iOrderListResponse {
     previous: string | null;
     results: iOrder[];
 }
+
+export interface iOrderDetailsResponse {
+    id: number;
+    order_number: string;
+    user: number;
+    user_name: string;
+    user_phone: string;
+    address: iAddress;
+    status: string;
+    payment_status: string;
+    subtotal: string;
+    total_mrp: string;
+    delivery_fee: string;
+    discount_amount: string;
+    total: string;
+    placed_at: string;
+    estimated_delivery_start: string | null;
+    estimated_delivery_end: string | null;
+    items: iOrderItem[];
+}

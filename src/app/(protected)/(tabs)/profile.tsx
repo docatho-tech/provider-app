@@ -9,7 +9,8 @@ import { Colors } from '@/constants/Colors'
 import { profileValidation } from '@/constants/validations/base'
 import { AuthContext } from '@/contexts/authenticationContext'
 import useAxios from '@/hooks/useAxios'
-import { iProfile } from '@/interfaces/authentication'
+import { useAppDispatch, useAppSelector } from '@/hooks/useStoreHooks'
+import { getProfileDetails } from '@/store/slices/authenticationSlice'
 import { getFormattedDate } from '@/utils/base'
 import { Formik, FormikHelpers } from 'formik'
 import React, { useContext, useEffect, useState } from 'react'
@@ -26,13 +27,14 @@ const initialValues = {
 const Profile = () => {
   // TODO: Replace with actual profile API endpoint when available
   const { logOut } = useContext(AuthContext);
-  const { requestGET: getProfile, response: profileResponse } = useAxios<iProfile>(API_ENDPOINTS.GET_PROFILE, true);
+  const dispatch = useAppDispatch();
+  const profileResponse = useAppSelector((state) => state.authentication.profile);
   const { requestPATCH: updateProfile, isLoading: isUpdatingProfile } = useAxios<{detail: string}>(API_ENDPOINTS.UPDATE_PROFILE);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState(initialValues);
 
   useEffect(() => {
-    getProfile();
+    dispatch(getProfileDetails());
   }, []);
 
   useEffect(() => {

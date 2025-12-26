@@ -19,28 +19,14 @@ export const HomeHeader = ({ name, profilePicture }: { name: string, profilePict
         <Pressable>
           <FontAwesome name="bell" size={22} color="white" />
         </Pressable>
-        <Image 
-          source={Images.profileIcon}
-          className="w-[35px] h-[35px] rounded-full"
-        />
+
+        <Pressable onPress={() => router.push('/profile')}>
+          <Image 
+            source={Images.profileIcon}
+            className="w-[35px] h-[35px] rounded-full"
+          />
+        </Pressable>
       </View>
-    </View>
-  )
-}
-
-export const HeaderWithCart = ({ routeName, backgroundColor = "transparent" }: { routeName: string, backgroundColor?: string }) => {
-  const {top} = useCustomSafeAreaInsets();  
-
-  return (
-    <View className='flex-row items-center justify-between px-[5%] pb-[10px]' style={{ paddingTop: top, backgroundColor: backgroundColor || "transparent" }}>
-      <HeaderLeftStandard routeName={routeName} />
-
-      <Pressable className='flex-row items-center gap-x-[10px] py-[10px] px-[15px] rounded-[18px]' onPress={() => {}}>
-        <View className='relative'>
-          <FontAwesome name="shopping-cart" size={24} color={Colors.primary} />
-        </View>
-        <Text className='text-[20px] text-primaryTextColor'>Cart</Text>
-      </Pressable>
     </View>
   )
 }

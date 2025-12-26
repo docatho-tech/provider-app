@@ -16,7 +16,7 @@ module.exports = {
           'primary-darkest': ''
         },
         borderRadius: {
-          'theme': '8px'
+          'default': '8px'
         }
       },
     },

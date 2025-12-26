@@ -5,5 +5,6 @@ export const API_ENDPOINTS = Object.freeze({
     GET_PROFILE: '/api/profile/',
     
     ORDER_LIST: '/api/providers/chemist-order-list/',
-    UPDATE_ORDER_STATUS: '/api/providers/chemist-order-update/:orderId/'
+    UPDATE_ORDER_STATUS: '/api/providers/chemist-order-update/:orderId/',
+    ORDER_DETAILS: '/api/providers/order-detail/:orderId/'
 })

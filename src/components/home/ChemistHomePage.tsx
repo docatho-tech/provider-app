@@ -1,9 +1,11 @@
 import { API_ENDPOINTS } from "@/constants/APIEndpoints";
+import { ESTIMATED_DELIVERY_MINUTES } from "@/constants/base";
 import { Colors } from "@/constants/Colors";
 import useAxios from "@/hooks/useAxios";
 import { iOrder, iOrderListResponse } from "@/interfaces/order";
 import { getFormattedPrice, getNextPageNumberFromURL, replaceUrlParams } from "@/utils/base";
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 import Toast from "react-native-toast-message";
@@ -17,35 +19,20 @@ import Box from "../icons/Box";
 import Call from "../icons/Call";
 import Location from "../icons/Location";
 
-const TAB_ITEMS = Object.freeze({
+export const TAB_ITEMS = Object.freeze({
   placed: {
-    label: 'New',
-    value: 'placed'
+    label: "New",
+    value: "placed",
   },
   processing: {
-    label: 'In Progress',
-    value: 'processing'
+    label: "In Progress",
+    value: "processing",
   },
   delivered: {
-    label: 'Completed',
-    value: 'delivered'
+    label: "Completed",
+    value: "delivered",
   },
-})
-
-const ESTIMATED_DELIVERY_MINUTES = Object.freeze({
-  ONE_HOUR : {
-    label: '1 Hour',
-    value: 60
-  },
-  TWO_HOURS : {
-    label: '2 Hours',
-    value: 120
-  },
-  TWENTY_FOUR_HOURS : {
-    label: '24 Hours',
-    value: 1440
-  },
-})
+});
 
 export default function ChemistHomePage() {
   const { requestGET: getOrderList, response: orderListResponse } = useAxios<iOrderListResponse>(API_ENDPOINTS.ORDER_LIST, true);
@@ -165,12 +152,15 @@ const Header = ({ selectedStatus, setSelectedStatus }: { selectedStatus: string,
 }
 
 const OrderItem = ({ order, onMarkAsDeliveredClick }: { order: iOrder, onMarkAsDeliveredClick: ( order: iOrder ) => void }) => {
+  const router = useRouter();
   return (
     <View className="bg-white rounded-[16px] border-primary/10 border">
       <View className="bg-[#F7F7F7] rounded-t-[16px] flex-row items-center gap-x-[10px] px-[15px] pt-[15px] pb-[15px] justify-between">
         <View className={`flex-row items-center gap-x-[10px] flex-wrap ${order.status === 'placed' ? 'w-[100%]' : 'w-[75%]'}`}>
           <Box color={Colors.primary} size={20} />
-          <ThemedText size="subheading" className="font-semibold">{order.order_number}</ThemedText>
+          <Pressable onPress={() => router.push(`/orders/${order.id}`)}>
+            <ThemedText size="subheading" className="font-semibold underline">{order.order_number}</ThemedText>
+          </Pressable>
           <View className="h-[5px] w-[5px] bg-primaryText rounded-full" />
           <ThemedText className="font-semibold">{order.user_name}</ThemedText>
         </View>
@@ -248,7 +238,7 @@ const OrderItem = ({ order, onMarkAsDeliveredClick }: { order: iOrder, onMarkAsD
         {
           order.status !== 'placed' && order.status !== 'delivered' &&
           <View className="flex-row items-center gap-x-[10px] justify-end">
-            <Pressable className="rounded-[12px] p-[10px] border border-secondaryTextColor/50">
+            <Pressable className="rounded-[12px] p-[10px] border border-secondaryTextColor/50" onPress={() => router.push(`/orders/${order.id}`)}>
               <ThemedText className="text-secondaryTextColor text-[17px]"> View Order </ThemedText>
             </Pressable>
             <Pressable className="bg-[#22AB03] rounded-[12px] p-[12px]" onPress={() => onMarkAsDeliveredClick(order)}>
