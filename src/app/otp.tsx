@@ -9,17 +9,35 @@ import { VerifyOTPResponse } from '@/interfaces/authentication';
 import Feather from '@expo/vector-icons/Feather';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { OtpInput } from "react-native-otp-entry";
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
 const OTP = () => {
   const [otp, setOtp] = useState<string>('');
+  const [cooldown, setCooldown] = useState(0);
   const { requestPOST: verifyOTP, isLoading: isVerifyingOTP } = useAxios<VerifyOTPResponse>(API_ENDPOINTS.VERIFY_OTP);
+  const { requestPOST: sendOTP, isLoading: isResendingOTP } = useAxios<{ detail: string }>(API_ENDPOINTS.SEND_OTP);
   const { loginAndSetTokens } = useContext(AuthContext);
   const { phone } = useLocalSearchParams<{ phone: string }>();
   const router = useRouter();
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [cooldown]);
+
+  const handleResendOTP = async () => {
+    if (!phone || cooldown > 0 || isResendingOTP) return;
+    const response = await sendOTP({ phone: `+91${phone}` });
+    if (response.status === 200) {
+      Toast.show({ type: 'success', text1: 'OTP sent again' });
+      setCooldown(30);
+    }
+  }
 
   const handleSubmit = async () => {
     const body = {
@@ -78,8 +96,10 @@ const OTP = () => {
 
           <PrimaryButton title='Submit' onPress={handleSubmit} className='mt-[50px]' loading={isVerifyingOTP} disabled={isVerifyingOTP} />
 
-          <Pressable className=''>
-            <Text className='text-primary font-light text-center mt-[30px]'> Resend OTP </Text>
+          <Pressable className='mt-[30px]' onPress={handleResendOTP} disabled={cooldown > 0 || isResendingOTP}>
+            <Text className={`font-light text-center ${cooldown > 0 || isResendingOTP ? 'text-secondaryTextColor' : 'text-primary'}`}>
+              {isResendingOTP ? 'Sending...' : cooldown > 0 ? `Resend OTP in ${cooldown}s` : 'Resend OTP'}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
