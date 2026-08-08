@@ -2,12 +2,10 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { useEffect, useRef, useState } from "react";
 
-import Constants from "expo-constants";
-
 import { Platform } from "react-native";
 
 export interface PushNotificationState {
-  expoPushToken?: Notifications.ExpoPushToken;
+  pushToken?: Notifications.DevicePushToken;
   notification?: Notifications.Notification;
 }
 
@@ -21,8 +19,8 @@ Notifications.setNotificationHandler({
 });
 
 export const usePushNotifications = (): PushNotificationState => {
-  const [expoPushToken, setExpoPushToken] = useState<
-    Notifications.ExpoPushToken | undefined
+  const [pushToken, setPushToken] = useState<
+    Notifications.DevicePushToken | undefined
   >();
 
   const [notification, setNotification] = useState<
@@ -36,7 +34,7 @@ export const usePushNotifications = (): PushNotificationState => {
 
   useEffect(() => {
     registerForPushNotificationsAsync().then((token) => {
-      setExpoPushToken(token);
+      setPushToken(token);
     });
 
     notificationListener.current =
@@ -85,11 +83,9 @@ export const usePushNotifications = (): PushNotificationState => {
       }
       
       try {
-        token = await Notifications.getExpoPushTokenAsync({
-          projectId: Constants.expoConfig?.extra?.eas.projectId,
-        });
+        token = await Notifications.getDevicePushTokenAsync();
       } catch (error) {
-        console.log(error, 'error');
+        console.log(error, 'error getting device push token');
       }
       
     } else {
@@ -100,7 +96,7 @@ export const usePushNotifications = (): PushNotificationState => {
   };
 
   return {
-    expoPushToken,
+    pushToken,
     notification,
   };
 };

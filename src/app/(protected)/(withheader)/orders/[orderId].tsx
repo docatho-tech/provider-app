@@ -7,18 +7,32 @@ import Box from '@/components/icons/Box';
 import Location from '@/components/icons/Location';
 import { HeaderLeftStandard } from '@/components/layout/Headers';
 import { API_ENDPOINTS } from '@/constants/APIEndpoints';
-import { ESTIMATED_DELIVERY_MINUTES } from '@/constants/base';
+import {
+  ESTIMATED_DELIVERY_MINUTES,
+  ORDER_STATUS,
+  getOrderStatusLabel,
+  isTerminalOrderStatus,
+} from '@/constants/base';
 import { Colors } from '@/constants/Colors';
 import useAxios from '@/hooks/useAxios';
 import useCustomSafeAreaInsets from '@/hooks/useCustomSafeAreaInsets';
+import useDownloadInvoice from '@/hooks/useDownloadInvoice';
 import { iOrder, iOrderDetailsResponse } from '@/interfaces/order';
 import { getFormattedPrice, replaceUrlParams } from '@/utils/base';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import Toast from 'react-native-toast-message';
+
+const STATUS_TOAST: Record<string, string> = {
+  [ORDER_STATUS.APPROVED]: 'Order accepted',
+  [ORDER_STATUS.REJECTED]: 'Order rejected',
+  [ORDER_STATUS.PACKED]: 'Order marked as packed',
+  [ORDER_STATUS.OUT_FOR_DELIVERY]: 'Order out for delivery',
+  [ORDER_STATUS.DELIVERED]: 'Order marked as delivered',
+};
 
 const OrderSuccess = () => {
   const { bottom, top } = useCustomSafeAreaInsets();
@@ -30,13 +44,14 @@ const OrderSuccess = () => {
   const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
   const { requestGET: getOrderDetails, response: orderDetailsResponse } = useAxios<iOrderDetailsResponse>(replaceUrlParams(API_ENDPOINTS.ORDER_DETAILS, { orderId: orderId }), true);
   const { requestPATCH: updateOrderStatus } = useAxios<iOrder>(API_ENDPOINTS.UPDATE_ORDER_STATUS, true);
+  const { downloadInvoice, isDownloading } = useDownloadInvoice();
 
   useEffect(() => {
     navigation.setOptions({
       header: () => (
         <View className='flex-row bg-white items-center justify-between px-[5%] pb-[10px]' style={{ paddingTop: top }}>
           <HeaderLeftStandard routeName={'Order Details'} />
-          <Chips text={orderDetailsResponse?.status || 'delivered'} color={getStatusColor(orderDetailsResponse?.status || '').color} backgroundColor={getStatusColor(orderDetailsResponse?.status || '').backgroundColor} />
+          <Chips text={getOrderStatusLabel(orderDetailsResponse?.status || ORDER_STATUS.DELIVERED)} color={getStatusColor(orderDetailsResponse?.status || '').color} backgroundColor={getStatusColor(orderDetailsResponse?.status || '').backgroundColor} />
         </View>
       )
     });
@@ -48,27 +63,18 @@ const OrderSuccess = () => {
 
   useEffect(() => {
     if (selectedEstimatedDeliveryMinutes) {
-      handleUpdateOrderStatus('delivered');
+      handleUpdateOrderStatus(ORDER_STATUS.DELIVERED);
     }
   }, [selectedEstimatedDeliveryMinutes]);
 
   const getStatusColor = (status: string) => {
-    if (status === 'delivered') {
-      return {
-        color: '#2B6436',
-        backgroundColor: '#D0EBD7'
-      }
+    if (status === ORDER_STATUS.DELIVERED) {
+      return { color: '#2B6436', backgroundColor: '#D0EBD7' }
     }
-    if(status === 'cancelled') {
-      return {
-        color: '#FF0000',
-        backgroundColor: '#FFE5E5'
-      }
+    if (status === ORDER_STATUS.REJECTED || status === ORDER_STATUS.CANCELLED) {
+      return { color: '#FF0000', backgroundColor: '#FFE5E5' }
     }
-    return {
-      color: '#313131',
-      backgroundColor: 'rgba(49, 49, 49, 0.1)'
-    }
+    return { color: '#313131', backgroundColor: 'rgba(49, 49, 49, 0.1)' }
   }
 
   const formattedEstimatedDeliveryMinutes = useMemo(() => {
@@ -82,9 +88,9 @@ const OrderSuccess = () => {
     setShowSelect(false);
     setShowConfirmation(false);
 
-    const body = {
-      status: status,
-      estimated_delivery_mins: selectedEstimatedDeliveryMinutes || 0
+    const body: Record<string, unknown> = { status };
+    if (status === ORDER_STATUS.DELIVERED && selectedEstimatedDeliveryMinutes) {
+      body.estimated_delivery_mins = selectedEstimatedDeliveryMinutes;
     }
 
     const localURL = replaceUrlParams(API_ENDPOINTS.UPDATE_ORDER_STATUS, { orderId: orderId });
@@ -93,7 +99,7 @@ const OrderSuccess = () => {
       setSelectedEstimatedDeliveryMinutes(null);
       setOnConfirmAction(() => {});
       Toast.show({
-        text1: 'Order marked as delivered',
+        text1: STATUS_TOAST[status] || 'Order updated',
         type: 'success',
       });
 
@@ -102,6 +108,8 @@ const OrderSuccess = () => {
   }
 
   if (!orderDetailsResponse) return null;
+
+  const orderStatus = orderDetailsResponse.status;
 
   return (
     <View className='flex-1'>
@@ -192,38 +200,74 @@ const OrderSuccess = () => {
       </ScrollView>
 
       {
-        (orderDetailsResponse?.status !== 'delivered' && orderDetailsResponse?.status !== 'cancelled') &&
+        orderStatus && !isTerminalOrderStatus(orderStatus) &&
         <View className='flex-row items-center gap-[10px] px-[5%]' style={{ paddingBottom: bottom }}>
-          
-          <Pressable 
-            className='border border-[#FF0000] rounded-[10px] p-[15px] items-center justify-center w-[50%]' 
-            onPress={() => { 
-              setShowConfirmation(true); 
-              setOnConfirmAction(() => () => handleUpdateOrderStatus('cancelled')); 
-            }}
-          >
-            <ThemedText className='text-[#FF0000]'>Reject</ThemedText>
-          </Pressable>
-
-          {
-            orderDetailsResponse?.status === 'placed' &&
-              <Pressable 
-                className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-[50%]' 
-                onPress={() => { 
+          {orderStatus === ORDER_STATUS.PLACED && (
+            <>
+              <Pressable
+                className='border border-[#FF0000] rounded-[10px] p-[15px] items-center justify-center w-[50%]'
+                onPress={() => {
                   setShowConfirmation(true);
-                  setOnConfirmAction(() => () => handleUpdateOrderStatus('processing')); 
+                  setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.REJECTED));
                 }}
               >
-              <ThemedText className='text-white'>Accept</ThemedText>
+                <ThemedText className='text-[#FF0000]'>Reject</ThemedText>
+              </Pressable>
+              <Pressable
+                className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-[50%]'
+                onPress={() => {
+                  setShowConfirmation(true);
+                  setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.APPROVED));
+                }}
+              >
+                <ThemedText className='text-white'>Accept</ThemedText>
+              </Pressable>
+            </>
+          )}
+          {orderStatus === ORDER_STATUS.APPROVED && (
+            <Pressable
+              className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full'
+              onPress={() => {
+                setShowConfirmation(true);
+                setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.PACKED));
+              }}
+            >
+              <ThemedText className='text-white'>Mark as Packed</ThemedText>
             </Pressable>
-          }
-
-          {
-            orderDetailsResponse?.status !== 'delivered' && orderDetailsResponse?.status !== 'placed' &&
-            <Pressable className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-[50%]' onPress={() => setShowSelect(true)}>
+          )}
+          {orderStatus === ORDER_STATUS.PACKED && (
+            <Pressable
+              className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full'
+              onPress={() => {
+                setShowConfirmation(true);
+                setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.OUT_FOR_DELIVERY));
+              }}
+            >
+              <ThemedText className='text-white'>Out for Delivery</ThemedText>
+            </Pressable>
+          )}
+          {orderStatus === ORDER_STATUS.OUT_FOR_DELIVERY && (
+            <Pressable className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full' onPress={() => setShowSelect(true)}>
               <ThemedText className='text-white'>Mark as Delivered</ThemedText>
             </Pressable>
-          }
+          )}
+        </View>
+      }
+
+      {
+        orderStatus === ORDER_STATUS.DELIVERED &&
+        <View className='px-[5%]' style={{ paddingBottom: bottom }}>
+          <Pressable
+            className='border border-primary rounded-[10px] p-[15px] items-center justify-center'
+            disabled={isDownloading}
+            onPress={() => downloadInvoice(orderId, orderDetailsResponse?.order_number)}
+          >
+            {
+              isDownloading
+                ? <ActivityIndicator size='small' color={Colors.primary} />
+                : <ThemedText className='text-primary'>Download Invoice</ThemedText>
+            }
+          </Pressable>
         </View>
       }
 

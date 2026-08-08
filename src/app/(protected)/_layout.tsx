@@ -1,28 +1,43 @@
+import { API_ENDPOINTS } from '@/constants/APIEndpoints';
 import { AuthContext } from '@/contexts/authenticationContext';
+import useAxios from '@/hooks/useAxios';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Redirect, Stack } from 'expo-router';
-import { useContext, useEffect } from 'react';
+import { useCallback, useContext, useEffect } from 'react';
+import { Platform } from 'react-native';
 
 export default function ProtectedRootLayout() {
   const { isLoggedIn, isReady } = useContext(AuthContext);
-  const { expoPushToken } = usePushNotifications();
-//   const { requestPOST: registerForPushNotifications } = useAxios(API_ENDPOINTS.REGISTER_FOR_PUSH_NOTIFICATIONS);
+  const { pushToken } = usePushNotifications();
+  const { requestPOST: registerDeviceToken } = useAxios(API_ENDPOINTS.DEVICE_TOKEN);
 
+  const sendNotificationTokenToServer = useCallback(async () => {
+    if (!pushToken?.data) {
+      return;
+    }
+
+    const platform =
+      Platform.OS === 'android'
+        ? 'android'
+        : Platform.OS === 'ios'
+          ? 'ios'
+          : 'web';
+
+    try {
+      await registerDeviceToken({
+        token: pushToken.data,
+        platform,
+      });
+    } catch (error) {
+      console.log('Failed to register device token', error);
+    }
+  }, [pushToken, registerDeviceToken]);
 
   useEffect(() => {
-    if(isLoggedIn) {
-      if(expoPushToken) {
-        sendNotificationTokenToServer();
-      }
+    if (isLoggedIn && pushToken) {
+      void sendNotificationTokenToServer();
     }
-  }, [isLoggedIn, expoPushToken])
-
-  const sendNotificationTokenToServer = () => {
-    const payload = {
-      token: expoPushToken?.data,
-    }
-    // registerForPushNotifications(payload);
-  }
+  }, [isLoggedIn, pushToken, sendNotificationTokenToServer]);
 
   // Show loading screen if not ready
   if(!isReady) {
