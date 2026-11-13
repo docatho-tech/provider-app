@@ -1,30 +1,31 @@
-import Chips from '@/components/common/Chips';
-import Confirmation from '@/components/common/Confirmation';
-import Separator from '@/components/common/Separator';
-import ThemedText from '@/components/common/ThemedText';
-import Select from '@/components/general/Select';
-import Box from '@/components/icons/Box';
-import Location from '@/components/icons/Location';
-import { HeaderLeftStandard } from '@/components/layout/Headers';
-import { API_ENDPOINTS } from '@/constants/APIEndpoints';
+import ThemedText from '@/components/common/ThemedText'
+import Box from '@/components/icons/Box'
+import { ScreenHeader } from '@/components/layout/Headers'
+import { Card, CardRow, CardSection } from '@/components/ui/Card'
+import { ActionButton, Avatar, Chip, CircleIcon, IconPill, StickyFooter } from '@/components/ui/Primitives'
+import Confirmation from '@/components/common/Confirmation'
+import Select from '@/components/general/Select'
+import { API_ENDPOINTS } from '@/constants/APIEndpoints'
 import {
   ESTIMATED_DELIVERY_MINUTES,
   ORDER_STATUS,
   getOrderStatusLabel,
-  isTerminalOrderStatus,
-} from '@/constants/base';
-import { Colors } from '@/constants/Colors';
-import useAxios from '@/hooks/useAxios';
-import useCustomSafeAreaInsets from '@/hooks/useCustomSafeAreaInsets';
-import useDownloadInvoice from '@/hooks/useDownloadInvoice';
-import { iOrder, iOrderDetailsResponse } from '@/interfaces/order';
-import { getFormattedPrice, replaceUrlParams } from '@/utils/base';
-import AntDesign from '@expo/vector-icons/AntDesign';
-import Feather from '@expo/vector-icons/Feather';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
-import Toast from 'react-native-toast-message';
+  isInProgressOrderStatus,
+} from '@/constants/base'
+import { Colors } from '@/constants/Colors'
+import useAxios from '@/hooks/useAxios'
+import useCustomSafeAreaInsets from '@/hooks/useCustomSafeAreaInsets'
+import useDownloadInvoice from '@/hooks/useDownloadInvoice'
+import { iOrder, iOrderDetailsResponse } from '@/interfaces/order'
+import { getFormattedPrice, replaceUrlParams } from '@/utils/base'
+import { itemQuantityLabel, orderStatusHeaderChip } from '@/utils/orderUi'
+import { dayLabel, timeLabel } from '@/utils/schedule'
+import Feather from '@expo/vector-icons/Feather'
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5'
+import { useLocalSearchParams, useRouter } from 'expo-router'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native'
+import Toast from 'react-native-toast-message'
 
 const STATUS_TOAST: Record<string, string> = {
   [ORDER_STATUS.APPROVED]: 'Order accepted',
@@ -32,314 +33,342 @@ const STATUS_TOAST: Record<string, string> = {
   [ORDER_STATUS.PACKED]: 'Order marked as packed',
   [ORDER_STATUS.OUT_FOR_DELIVERY]: 'Order out for delivery',
   [ORDER_STATUS.DELIVERED]: 'Order marked as delivered',
-};
+}
 
-const OrderSuccess = () => {
-  const { bottom, top } = useCustomSafeAreaInsets();
-  const navigation = useNavigation();
-  const { orderId } = useLocalSearchParams<{ orderId: string }>();
-  const [showSelect, setShowSelect] = useState<boolean>(false);
-  const [showConfirmation, setShowConfirmation] = useState<boolean>(false);
-  const [selectedEstimatedDeliveryMinutes, setSelectedEstimatedDeliveryMinutes] = useState<number | null>(null);
-  const [onConfirmAction, setOnConfirmAction] = useState<() => void>(() => {});
-  const { requestGET: getOrderDetails, response: orderDetailsResponse } = useAxios<iOrderDetailsResponse>(replaceUrlParams(API_ENDPOINTS.ORDER_DETAILS, { orderId: orderId }), true);
-  const { requestPATCH: updateOrderStatus } = useAxios<iOrder>(API_ENDPOINTS.UPDATE_ORDER_STATUS, true);
-  const { downloadInvoice, isDownloading } = useDownloadInvoice();
+/** The fulfilment step a status moves on to, and what the button for it says. */
+const NEXT_STEP: Record<string, { status: string; label: string }> = {
+  [ORDER_STATUS.APPROVED]: { status: ORDER_STATUS.PACKED, label: 'Mark as packed' },
+  [ORDER_STATUS.PACKED]: { status: ORDER_STATUS.OUT_FOR_DELIVERY, label: 'Out for delivery' },
+}
+
+/**
+ * One order, in whichever of its three states it is in.
+ *
+ * A new order's items carry checkboxes: accepting is a claim that the pharmacy
+ * has all of them, and ticking them off is how that claim gets made. Once the
+ * order is accepted the ticks are gone — they were a packing aid, not a record.
+ */
+const OrderDetail = () => {
+  const router = useRouter()
+  const { bottom } = useCustomSafeAreaInsets()
+  const { orderId } = useLocalSearchParams<{ orderId: string }>()
+  const [showSelect, setShowSelect] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<{ title: string; description: string; onConfirm: () => void } | null>(null)
+  const [deliveryMinutes, setDeliveryMinutes] = useState<number | null>(null)
+  const [checked, setChecked] = useState<Record<number, boolean>>({})
+  const [updating, setUpdating] = useState(false)
+
+  const { requestGET: getOrderDetails, response: order } = useAxios<iOrderDetailsResponse>(
+    replaceUrlParams(API_ENDPOINTS.ORDER_DETAILS, { orderId }), true,
+  )
+  const { requestPATCH: updateOrderStatus } = useAxios<iOrder>(API_ENDPOINTS.UPDATE_ORDER_STATUS, true)
+  const { downloadInvoice, isDownloading } = useDownloadInvoice()
+
+  useEffect(() => { getOrderDetails() }, [orderId])
+
+  // Every line starts ticked: the pharmacy is confirming a full order and
+  // unticking what it cannot supply, which is the rarer half of the job.
+  useEffect(() => {
+    if (!order) return
+    setChecked(Object.fromEntries(order.items.map((item) => [item.id, true])))
+  }, [order?.id])
 
   useEffect(() => {
-    navigation.setOptions({
-      header: () => (
-        <View className='flex-row bg-white items-center justify-between px-[5%] pb-[10px]' style={{ paddingTop: top }}>
-          <HeaderLeftStandard routeName={'Order Details'} />
-          <Chips text={getOrderStatusLabel(orderDetailsResponse?.status || ORDER_STATUS.DELIVERED)} color={getStatusColor(orderDetailsResponse?.status || '').color} backgroundColor={getStatusColor(orderDetailsResponse?.status || '').backgroundColor} />
-        </View>
-      )
-    });
-  }, [orderDetailsResponse]);
+    if (deliveryMinutes) handleUpdateStatus(ORDER_STATUS.DELIVERED)
+  }, [deliveryMinutes])
 
-  useEffect(() => {
-    getOrderDetails();
-  }, [orderId]);
+  const deliveryOptions = useMemo(() => (
+    Object.values(ESTIMATED_DELIVERY_MINUTES).map((item) => ({ label: item.label, value: item.value.toString() }))
+  ), [])
 
-  useEffect(() => {
-    if (selectedEstimatedDeliveryMinutes) {
-      handleUpdateOrderStatus(ORDER_STATUS.DELIVERED);
-    }
-  }, [selectedEstimatedDeliveryMinutes]);
+  const handleUpdateStatus = async (status: string) => {
+    setShowSelect(false)
+    setConfirmAction(null)
+    setUpdating(true)
 
-  const getStatusColor = (status: string) => {
-    if (status === ORDER_STATUS.DELIVERED) {
-      return { color: '#2B6436', backgroundColor: '#D0EBD7' }
-    }
-    if (status === ORDER_STATUS.REJECTED || status === ORDER_STATUS.CANCELLED) {
-      return { color: '#FF0000', backgroundColor: '#FFE5E5' }
-    }
-    return { color: '#313131', backgroundColor: 'rgba(49, 49, 49, 0.1)' }
-  }
+    const body: Record<string, unknown> = { status }
+    if (status === ORDER_STATUS.DELIVERED && deliveryMinutes) body.estimated_delivery_mins = deliveryMinutes
 
-  const formattedEstimatedDeliveryMinutes = useMemo(() => {
-    return Object.values(ESTIMATED_DELIVERY_MINUTES).map((item) => ({
-      label: item.label,
-      value: item.value.toString(),
-    }));
-  }, []);
-
-  const handleUpdateOrderStatus = async (status: string) => {
-    setShowSelect(false);
-    setShowConfirmation(false);
-
-    const body: Record<string, unknown> = { status };
-    if (status === ORDER_STATUS.DELIVERED && selectedEstimatedDeliveryMinutes) {
-      body.estimated_delivery_mins = selectedEstimatedDeliveryMinutes;
-    }
-
-    const localURL = replaceUrlParams(API_ENDPOINTS.UPDATE_ORDER_STATUS, { orderId: orderId });
-    const response = await updateOrderStatus(body, localURL);
+    const localURL = replaceUrlParams(API_ENDPOINTS.UPDATE_ORDER_STATUS, { orderId })
+    const response = await updateOrderStatus(body, localURL)
+    setUpdating(false)
     if (response.status === 200) {
-      setSelectedEstimatedDeliveryMinutes(null);
-      setOnConfirmAction(() => {});
-      Toast.show({
-        text1: STATUS_TOAST[status] || 'Order updated',
-        type: 'success',
-      });
-
-      getOrderDetails();
+      setDeliveryMinutes(null)
+      Toast.show({ text1: STATUS_TOAST[status] || 'Order updated', type: 'success' })
+      getOrderDetails()
     }
   }
 
-  if (!orderDetailsResponse) return null;
+  const confirm = (title: string, description: string, status: string) => setConfirmAction({
+    title,
+    description,
+    onConfirm: () => handleUpdateStatus(status),
+  })
 
-  const orderStatus = orderDetailsResponse.status;
+  if (!order) {
+    return (
+      <View className='flex-1 bg-page'>
+        <ScreenHeader title='Order' backButtonRoute='/' />
+        <ActivityIndicator className='mt-[40px]' color={Colors.primary} />
+      </View>
+    )
+  }
+
+  const chip = orderStatusHeaderChip(order.status)
+  const isNew = order.status === ORDER_STATUS.PLACED
+  const inTransit = order.status === ORDER_STATUS.OUT_FOR_DELIVERY
+  const delivered = order.status === ORDER_STATUS.DELIVERED
+  const nextStep = NEXT_STEP[order.status]
+  const address = [order.address?.address_line1, order.address?.address_line2, order.address?.landmark, order.address?.city, order.address?.postal_code]
+    .filter(Boolean).join(', ')
+
+  const call = () => order.user_phone && Linking.openURL(`tel:${order.user_phone}`)
+  const navigate = () => address && Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`)
 
   return (
-    <View className='flex-1'>
-      <ScrollView className='flex-1 px-[5%]' showsVerticalScrollIndicator={false}>
-        <View style={{ paddingBottom: bottom }}>
-          <View className='items-start justify-start mt-[20px]'>
-            <ThemedText size='subheading' className='font-semibold mt-[5px]'>ID: {orderDetailsResponse?.order_number}</ThemedText>
-          </View>
+    <View className='flex-1 bg-page'>
+      <ScreenHeader
+        title={order.order_number}
+        backButtonRoute='/'
+        right={<Chip label={chip.label} tone={chip.tone} />}
+      />
 
-          <View className='bg-white rounded-[10px] p-[10px] mt-[10px]'>
-            <View className='flex-row items-center gap-[10px]'>
-              <Feather name="truck" size={18} color={Colors.primaryTextColor} />
-              <ThemedText>Shipping Details</ThemedText>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 16 }}>
+        <Card>
+          <CardSection icon={<Box color={Colors.primaryTextColor} size={16} />} title='Order details' />
+          {order.items.map((item, index) => (
+            <CardRow key={item.id} first={index === 0}>
+              <View className='flex-row items-center gap-x-[12px]'>
+                {isNew ? (
+                  <Checkbox
+                    value={checked[item.id] ?? true}
+                    onToggle={() => setChecked((current) => ({ ...current, [item.id]: !(current[item.id] ?? true) }))}
+                  />
+                ) : null}
+                <FontAwesome5 name='capsules' size={16} color={Colors.primaryTextColor} />
+                <ThemedText size='subheading' className='flex-1' numberOfLines={1}>{item.medicine_name}</ThemedText>
+                <ThemedText size='subheading' className='font-semibold'>{itemQuantityLabel(item)}</ThemedText>
+              </View>
+            </CardRow>
+          ))}
+          <CardRow>
+            <View className='flex-row items-center justify-between'>
+              <ThemedText size='subheading' className='font-bold'>Total</ThemedText>
+              <ThemedText size='subheading' className='font-bold'>{getFormattedPrice(Number(order.total))}</ThemedText>
             </View>
+          </CardRow>
+        </Card>
 
-            <View className='my-[10px]'>
-              <Separator />
+        <Card>
+          <CardSection icon={<Feather name='user' size={15} color={Colors.primaryTextColor} />} title='Customer details' />
+          <CardRow first>
+            <View className='flex-row items-center gap-x-[12px]'>
+              <Avatar name={order.user_name} size={44} />
+              <ThemedText size='subheading' className='font-semibold flex-1' numberOfLines={1}>{order.user_name}</ThemedText>
+              <View className='items-end'>
+                <ThemedText size='small' className='font-semibold'>{dayLabel(order.placed_at)}</ThemedText>
+                <ThemedText size='small' className='mt-[3px]' style={{ color: Colors.mutedTextColor }}>
+                  {timeLabel(order.placed_at)}
+                </ThemedText>
+              </View>
             </View>
+          </CardRow>
+          <CardRow>
+            <ContactLine
+              label='Delivery address'
+              value={address || 'No address on file'}
+              icon={<Feather name='navigation' size={16} color={Colors.primary} />}
+              leading={<Feather name='map-pin' size={15} color={Colors.primaryTextColor} />}
+              onPress={address ? navigate : undefined}
+            />
+          </CardRow>
+          <CardRow>
+            <ContactLine
+              value={order.user_phone || 'No phone on file'}
+              icon={<Feather name='phone' size={16} color={Colors.primary} />}
+              leading={<Feather name='phone' size={15} color={Colors.primaryTextColor} />}
+              onPress={order.user_phone ? call : undefined}
+            />
+          </CardRow>
+        </Card>
 
-            {
-              orderDetailsResponse?.estimated_delivery_start && orderDetailsResponse?.estimated_delivery_end &&
-              <View className='flex-row items-center gap-[10px]'>
-                <View className='justify-center bg-primary/10 rounded-full w-[35px] h-[35px] items-center'>
-                  <Feather name="calendar" size={18} color={Colors.primary} />
+        {inTransit ? (
+          <Card>
+            <CardSection icon={<Feather name='truck' size={15} color={Colors.primaryTextColor} />} title='Rider details' />
+            <CardRow first>
+              <View className='flex-row items-center gap-x-[12px]'>
+                <Avatar name={order.rider_name || 'Rider'} size={42} />
+                <View className='flex-1'>
+                  <ThemedText size='subheading' className='font-semibold'>{order.rider_name || 'Not assigned yet'}</ThemedText>
+                  {order.rider_code ? (
+                    <ThemedText size='small' className='mt-[3px]' style={{ color: Colors.mutedTextColor }}>{order.rider_code}</ThemedText>
+                  ) : null}
                 </View>
-
-                <View className='w-[80%]'>
-                  <ThemedText>Estimated Delivery</ThemedText>
-                  <ThemedText className='text-secondaryTextColor mt-[5px] !text-[12px]'>{orderDetailsResponse?.estimated_delivery_start} - {orderDetailsResponse?.estimated_delivery_end}</ThemedText>
+                {order.estimated_delivery_mins ? (
+                  <Chip tone='primarySoft' label={`ETA ${order.estimated_delivery_mins}min`} />
+                ) : null}
+              </View>
+            </CardRow>
+          </Card>
+        ) : (
+          <Card>
+            <CardSection icon={<Feather name='calendar' size={15} color={Colors.primaryTextColor} />} title='Order status' />
+            <CardRow first>
+              <View className='flex-row items-center gap-x-[12px]'>
+                <IconPill><Feather name='package' size={17} color={Colors.primary} /></IconPill>
+                <View className='flex-1'>
+                  <ThemedText size='subheading' className='font-semibold'>{getOrderStatusLabel(order.status)}</ThemedText>
+                  <ThemedText size='small' className='mt-[3px]' style={{ color: Colors.mutedTextColor }}>
+                    {delivered && order.delivered_at
+                      ? `Delivered ${dayLabel(order.delivered_at)} at ${timeLabel(order.delivered_at)}`
+                      : `Placed ${dayLabel(order.placed_at)} at ${timeLabel(order.placed_at)}`}
+                  </ThemedText>
                 </View>
               </View>
-            }
-
-            {
-              orderDetailsResponse?.estimated_delivery_start && orderDetailsResponse?.estimated_delivery_end &&
-              <View className='my-[10px]'>
-                <Separator />
-              </View>
-            }
-
-            <View className='flex-row items-center gap-[10px]'>
-              <View className='justify-center bg-primary/10 rounded-full w-[35px] h-[35px] items-center'>
-                <Location size={18} color={Colors.primary} />
-              </View>
-
-              <View className='w-[80%]'>
-                <ThemedText>Delivery Address</ThemedText>
-                <ThemedText className='text-secondaryTextColor mt-[5px] !text-[12px]'> {orderDetailsResponse?.address?.address_line1} {orderDetailsResponse?.address?.address_line2} {orderDetailsResponse?.address?.landmark} {orderDetailsResponse?.address?.city} {orderDetailsResponse?.address?.state} {orderDetailsResponse?.address?.postal_code} </ThemedText>
-              </View>
-            </View>
-          </View>
-
-          <OrderDetails data={orderDetailsResponse as iOrderDetailsResponse} />
-
-          <View className='bg-white rounded-[10px] p-[10px] mt-[10px]'>
-            <View className='flex-row items-center gap-[10px]'>
-              <AntDesign name="user" size={16} color={Colors.primaryTextColor} />
-              <ThemedText>User Details</ThemedText>
-            </View>
-            <View className='flex-row items-center gap-[10px] mt-[10px]'>
-              <View className='justify-center bg-primary/10 rounded-full w-[35px] h-[35px] items-center'>
-                <AntDesign name="user" size={16} color={Colors.primary} />
-              </View>
-              <ThemedText>{orderDetailsResponse?.user_name || 'N/A'}</ThemedText>
-            </View>
-            <View className='flex-row items-center gap-[10px] mt-[10px]'>
-              <View className='justify-center bg-primary/10 rounded-full w-[35px] h-[35px] items-center'>
-                <Feather name="phone" size={16} color={Colors.primary} />
-              </View>
-              <ThemedText>{orderDetailsResponse?.user_phone || 'N/A'}</ThemedText>
-            </View>
-          </View>
-
-          <View className='bg-white rounded-[10px] p-[10px] mt-[10px]'>
-            <View className='flex-row items-center gap-[10px]'>
-              <AntDesign name="creditcard" size={16} color={Colors.primaryTextColor} />
-              <ThemedText>Payment Method</ThemedText>
-            </View>
-            <View className='flex-row items-center gap-[10px] mt-[10px]'>
-              <View className='justify-center bg-primary/10 rounded-full w-[35px] h-[35px] items-center'>
-                <AntDesign name="creditcard" size={16} color={Colors.primary} />
-              </View>
-              <ThemedText> Online </ThemedText>
-            </View>
-          </View>
-        </View>
-
+            </CardRow>
+            {order.estimated_delivery_start && order.estimated_delivery_end ? (
+              <CardRow>
+                <View className='flex-row items-center gap-x-[12px]'>
+                  <IconPill><Feather name='clock' size={17} color={Colors.primary} /></IconPill>
+                  <View className='flex-1'>
+                    <ThemedText size='subheading' className='font-semibold'>Estimated delivery</ThemedText>
+                    <ThemedText size='small' className='mt-[3px]' style={{ color: Colors.mutedTextColor }}>
+                      {order.estimated_delivery_start} - {order.estimated_delivery_end}
+                    </ThemedText>
+                  </View>
+                </View>
+              </CardRow>
+            ) : null}
+          </Card>
+        )}
       </ScrollView>
 
-      {
-        orderStatus && !isTerminalOrderStatus(orderStatus) &&
-        <View className='flex-row items-center gap-[10px] px-[5%]' style={{ paddingBottom: bottom }}>
-          {orderStatus === ORDER_STATUS.PLACED && (
-            <>
-              <Pressable
-                className='border border-[#FF0000] rounded-[10px] p-[15px] items-center justify-center w-[50%]'
-                onPress={() => {
-                  setShowConfirmation(true);
-                  setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.REJECTED));
-                }}
-              >
-                <ThemedText className='text-[#FF0000]'>Reject</ThemedText>
-              </Pressable>
-              <Pressable
-                className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-[50%]'
-                onPress={() => {
-                  setShowConfirmation(true);
-                  setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.APPROVED));
-                }}
-              >
-                <ThemedText className='text-white'>Accept</ThemedText>
-              </Pressable>
-            </>
-          )}
-          {orderStatus === ORDER_STATUS.APPROVED && (
-            <Pressable
-              className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full'
-              onPress={() => {
-                setShowConfirmation(true);
-                setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.PACKED));
-              }}
-            >
-              <ThemedText className='text-white'>Mark as Packed</ThemedText>
-            </Pressable>
-          )}
-          {orderStatus === ORDER_STATUS.PACKED && (
-            <Pressable
-              className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full'
-              onPress={() => {
-                setShowConfirmation(true);
-                setOnConfirmAction(() => () => handleUpdateOrderStatus(ORDER_STATUS.OUT_FOR_DELIVERY));
-              }}
-            >
-              <ThemedText className='text-white'>Out for Delivery</ThemedText>
-            </Pressable>
-          )}
-          {orderStatus === ORDER_STATUS.OUT_FOR_DELIVERY && (
-            <Pressable className='bg-primary rounded-[10px] p-[15px] items-center justify-center w-full' onPress={() => setShowSelect(true)}>
-              <ThemedText className='text-white'>Mark as Delivered</ThemedText>
-            </Pressable>
-          )}
-        </View>
-      }
-
-      {
-        orderStatus === ORDER_STATUS.DELIVERED &&
-        <View className='px-[5%]' style={{ paddingBottom: bottom }}>
-          <Pressable
-            className='border border-primary rounded-[10px] p-[15px] items-center justify-center'
-            disabled={isDownloading}
-            onPress={() => downloadInvoice(orderId, orderDetailsResponse?.order_number)}
-          >
-            {
-              isDownloading
-                ? <ActivityIndicator size='small' color={Colors.primary} />
-                : <ThemedText className='text-primary'>Download Invoice</ThemedText>
-            }
-          </Pressable>
-        </View>
-      }
+      <StickyFooter bottomInset={bottom}>
+        {isNew ? (
+          <>
+            <View className='flex-1'>
+              <ActionButton
+                title='Reject'
+                tone='danger'
+                loading={updating}
+                onPress={() => confirm('Reject order?', 'The customer will be notified.', ORDER_STATUS.REJECTED)}
+              />
+            </View>
+            <View className='flex-1'>
+              <ActionButton
+                title='Accept'
+                tone='primary'
+                loading={updating}
+                onPress={() => confirm('Accept order?', 'You will start processing this order.', ORDER_STATUS.APPROVED)}
+              />
+            </View>
+          </>
+        ) : inTransit ? (
+          <>
+            <View className='flex-1'>
+              <ActionButton
+                title='Reject'
+                tone='neutral'
+                loading={updating}
+                onPress={() => confirm('Reject order?', 'The customer will be notified.', ORDER_STATUS.REJECTED)}
+              />
+            </View>
+            <View className='flex-1'>
+              <ActionButton title='Mark as delivered' tone='primary' loading={updating} onPress={() => setShowSelect(true)} />
+            </View>
+          </>
+        ) : delivered ? (
+          <>
+            <View className='flex-1'>
+              <ActionButton
+                title='Raise a concern'
+                tone='neutral'
+                onPress={() => router.push('/profile')}
+              />
+            </View>
+            <View className='flex-1'>
+              <ActionButton
+                title='Download invoice'
+                tone='primary'
+                icon={<Feather name='file-text' size={16} color='#FFFFFF' />}
+                loading={isDownloading}
+                onPress={() => downloadInvoice(orderId, order.order_number)}
+              />
+            </View>
+          </>
+        ) : nextStep ? (
+          <View className='flex-1'>
+            <ActionButton
+              title={nextStep.label}
+              tone='primary'
+              loading={updating}
+              onPress={() => handleUpdateStatus(nextStep.status)}
+            />
+          </View>
+        ) : (
+          <View className='flex-1'>
+            <ActionButton title={getOrderStatusLabel(order.status)} tone='disabled' />
+          </View>
+        )}
+      </StickyFooter>
 
       <Select
         show={showSelect}
         onClose={() => setShowSelect(false)}
         onSave={() => setShowSelect(false)}
-        selectedValue={selectedEstimatedDeliveryMinutes?.toString() || ''}
-        onValueChange={(value) => setSelectedEstimatedDeliveryMinutes(Number(value.value))}
-        items={formattedEstimatedDeliveryMinutes}
+        selectedValue={deliveryMinutes?.toString() || ''}
+        onValueChange={(value) => setDeliveryMinutes(Number(value.value))}
+        items={deliveryOptions}
       />
 
       <Confirmation
-        open={showConfirmation}
-        onClose={() => setShowConfirmation(false)}
-        onConfirm={onConfirmAction}
-        onCancel={() => setShowConfirmation(false)}
+        open={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        title={confirmAction?.title}
+        description={confirmAction?.description}
+        onConfirm={() => confirmAction?.onConfirm()}
+        onCancel={() => setConfirmAction(null)}
       />
     </View>
   )
 }
 
-export default OrderSuccess
+const Checkbox = ({ value, onToggle }: { value: boolean; onToggle: () => void }) => (
+  <Pressable
+    onPress={onToggle}
+    hitSlop={8}
+    className='w-[22px] h-[22px] rounded-[6px] items-center justify-center'
+    style={{
+      backgroundColor: value ? Colors.primary : '#FFFFFF',
+      borderWidth: value ? 0 : 1.5,
+      borderColor: '#C9C9C9',
+    }}
+  >
+    {value ? <Feather name='check' size={15} color='#FFFFFF' /> : null}
+  </Pressable>
+)
 
-const OrderDetails = ({ data }: { data: iOrderDetailsResponse }) => {
-
-  if (!data) return null;
-  return (
-    <View className='bg-white rounded-[10px] p-[10px] mt-[10px]'>
-      <View className='flex-row items-center gap-[5px]'>
-        <Box color={Colors.primaryTextColor} size={15} />
-        <ThemedText className='text-primaryTextColor'> Order Details </ThemedText>
-      </View>
-
-      <View className='my-[10px]'>
-        <Separator />
-      </View>
-
-      {
-        data.items.map((item, index) => (
-          <View key={index} className='mt-[5px] flex-row items-center justify-between'>
-            <View>
-              <ThemedText className='mt-[10px]'> {item.medicine_name} </ThemedText>
-              <ThemedText className='mt-[5px] text-secondaryTextColor !text-[12px]'> Qty: {item.quantity} </ThemedText>
-            </View>
-            <ThemedText className='mt-[10px] font-semibold'> {getFormattedPrice(Number(item.line_total))} </ThemedText>
-          </View>
-        ))
-      }
-      <View className='mt-[5px] flex-row items-center justify-between'>
-        <View>
-          <ThemedText className='mt-[10px] !text-[12px]'> Subtotal </ThemedText>
-        </View>
-        <ThemedText className='mt-[10px] font-semibold'> {getFormattedPrice(Number(data.subtotal))} </ThemedText>
-      </View>
-      <View className='mt-[5px] flex-row items-center justify-between'>
-        <View>
-          <ThemedText className='mt-[10px] !text-[12px]'> Delivery Fee </ThemedText>
-        </View>
-        <ThemedText className='mt-[10px] font-semibold'> {getFormattedPrice(Number(data.delivery_fee))} </ThemedText>
-      </View>
-
-      <View className='my-[10px]'>
-        <Separator />
-      </View>
-
-      <View className='mt-[5px] flex-row items-center justify-between'>
-        <View>
-          <ThemedText className='font-semibold'> Total Paid </ThemedText>
-        </View>
-        <ThemedText className='font-semibold'> {getFormattedPrice(Number(data.total))} </ThemedText>
+const ContactLine = ({ label, value, icon, leading, onPress }: {
+  label?: string
+  value: string
+  icon: React.ReactNode
+  leading: React.ReactNode
+  onPress?: () => void
+}) => (
+  <View className='flex-row items-center justify-between gap-x-[12px]'>
+    <View className='flex-row items-start gap-x-[10px] flex-1'>
+      <View className='pt-[2px]'>{leading}</View>
+      <View className='flex-1'>
+        {label ? <ThemedText size='subheading' className='font-semibold'>{label}</ThemedText> : null}
+        <ThemedText size='subheading' className={label ? 'mt-[3px]' : ''} style={label ? { color: Colors.secondaryTextColor } : undefined}>
+          {value}
+        </ThemedText>
       </View>
     </View>
-  )
-}
+    <Pressable onPress={onPress} disabled={!onPress} style={!onPress ? { opacity: 0.4 } : undefined}>
+      <CircleIcon size={42}>{icon}</CircleIcon>
+    </Pressable>
+  </View>
+)
+
+export default OrderDetail

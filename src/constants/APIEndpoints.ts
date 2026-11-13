@@ -9,10 +9,19 @@ export const API_ENDPOINTS = Object.freeze({
     ORDER_DETAILS: '/api/providers/order-detail/:orderId/',
     ORDER_INVOICE: '/api/providers/order-invoice/:orderId/',
     EARNINGS: '/api/providers/earnings/',
+    INSIGHTS: '/api/providers/insights/',
+    STATEMENT: '/api/providers/statement/',
+    PARTNER_CATALOG: '/api/providers/catalog/',
     BANK: '/api/providers/bank/',
 
     APPOINTMENTS: '/api/healthcare/provider/appointments/',
+    APPOINTMENT_DETAIL: '/api/healthcare/provider/appointments/:appointmentId/',
     APPOINTMENT_VIDEO_TOKEN: '/api/healthcare/provider/appointments/:appointmentId/video-token/',
+    APPOINTMENT_PRESCRIPTION: '/api/healthcare/provider/appointments/:appointmentId/prescription/',
+
+    DIAGNOSTIC_BOOKINGS: '/api/healthcare/provider/diagnostic-bookings/',
+    DIAGNOSTIC_BOOKING_DETAIL: '/api/healthcare/provider/diagnostic-bookings/:bookingId/',
+    UPLOADS: '/api/uploads/',
     DOCTOR_PROFILE: '/api/healthcare/provider/doctor-profile/',
     AVAILABILITY: '/api/healthcare/provider/availability/',
 

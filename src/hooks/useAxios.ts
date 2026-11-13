@@ -179,7 +179,11 @@ const useAxios = <T>(
       setResponse(response.data);
       return response;
     } catch (error: any) {
-      console.log(error.response.data, "error.response.data");
+      // `error.response` is undefined for anything that never reached the
+      // server — a wrong host, no connectivity, a timeout. Reading `.data` off
+      // it threw inside the catch, which swallowed the real failure: no toast,
+      // no log, the button simply did nothing. Exactly the case the operator
+      // most needs told about.
       setError(error.message);
       handleError(error);
       throw error;
@@ -264,7 +268,10 @@ const useAxios = <T>(
       setResponse(response.data);
       return response;
     } catch (error: any) {
-      console.log(error.response.data);
+      // Same guard as requestPOST: no `response` on a network failure, and
+      // reading it threw inside the catch. Every Accept, Reject and
+      // Mark-delivered goes through here, so the failure mode was a button
+      // that looked like it had worked.
       setError(error.message);
       handleError(error);
       return error;

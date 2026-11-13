@@ -1,13 +1,18 @@
+import { Colors } from '@/constants/Colors'
+import Feather from '@expo/vector-icons/Feather'
+import React from 'react'
+
 export type AppointmentLike = {
   status: string
   payment_status?: string
   requires_payment?: boolean
   consultation_mode?: string
+  patient_name?: string
 }
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: '#FEF3C7', text: '#B45309', label: 'Waiting for doctor' },
-  confirmed: { bg: '#D1FAE5', text: '#047857', label: 'Confirmed' },
+  pending: { bg: '#FEF3C7', text: '#B45309', label: 'New request' },
+  confirmed: { bg: Colors.successBg, text: Colors.successText, label: 'Confirmed' },
   in_progress: { bg: '#DBEAFE', text: '#1D4ED8', label: 'In consultation' },
   completed: { bg: '#E5E7EB', text: '#374151', label: 'Completed' },
   cancelled: { bg: '#FEE2E2', text: '#B91C1C', label: 'Cancelled' },
@@ -15,17 +20,64 @@ export const STATUS_COLORS: Record<string, { bg: string; text: string; label: st
 }
 
 export function getStatusMeta(status: string) {
-  return STATUS_COLORS[status] ?? { bg: '#EEF4FF', text: '#064CBD', label: status.replace('_', ' ') }
+  return STATUS_COLORS[status] ?? { bg: Colors.iconPill, text: Colors.primary, label: status.replace('_', ' ') }
+}
+
+/** Everything the doctor still has to do something about. */
+export const isOpenAppointment = (status: string) =>
+  !['completed', 'cancelled', 'rejected'].includes(status)
+
+export const isOnline = (mode?: string) => mode === 'online'
+
+/** "Online Consultation" / "In-Clinic visit", as the rows label them. */
+export function appointmentModeLabel(mode?: string): string {
+  if (isOnline(mode)) return 'Online Consultation'
+  if (mode === 'home_visit') return 'Home visit'
+  return 'In-Clinic visit'
+}
+
+/** The leading pill icon: a camera for online, a clinic for everything else. */
+export function appointmentModeIcon(mode?: string, color: string = Colors.primary, size = 17) {
+  return React.createElement(Feather, {
+    name: isOnline(mode) ? 'video' : 'home',
+    size,
+    color,
+  })
+}
+
+/** Free-text search over the fields a partner would actually type. */
+export function matchesQuery(appointment: AppointmentLike, query: string): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  return [appointment.patient_name, appointmentModeLabel(appointment.consultation_mode), appointment.status]
+    .some((field) => (field ?? '').toLowerCase().includes(needle))
+}
+
+/**
+ * Whether the doctor can open the call. The backend answers this on the
+ * appointment (`can_join_video`) because it knows the room state; the local
+ * rule is only the fallback for a payload that predates the field.
+ */
+export function canJoinVideo(appointment: {
+  can_join_video?: boolean
+  consultation_mode?: string
+  payment_status?: string
+  status?: string
+}): boolean {
+  if (typeof appointment.can_join_video === 'boolean') return appointment.can_join_video
+  return (
+    isOnline(appointment.consultation_mode)
+    && appointment.payment_status === 'paid'
+    && ['confirmed', 'in_progress'].includes(appointment.status ?? '')
+  )
 }
 
 export function formatAppointmentDate(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+  return new Date(iso).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 export function formatAppointmentTime(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
+  return new Date(iso).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
 export function formatSlotLabel(iso: string) {
@@ -48,40 +100,12 @@ export function getAppointmentSteps(a: AppointmentLike): { key: string; label: s
     ]
   }
 
-  const steps = [
-    { key: 'booked', label: 'Booked', state: 'done' as StepState },
-    {
-      key: 'paid',
-      label: a.consultation_mode === 'online' ? 'Paid' : 'Payment',
-      state: paid ? 'done' : 'current',
-    },
-    {
-      key: 'confirmed',
-      label: 'Doctor confirmed',
-      state: confirmed ? 'done' : paid ? 'current' : 'upcoming',
-    },
-    {
-      key: 'consult',
-      label: 'Consultation',
-      state: done ? 'done' : inCall ? 'current' : confirmed ? 'upcoming' : 'upcoming',
-    },
+  return [
+    { key: 'booked', label: 'Booked', state: 'done' },
+    { key: 'paid', label: isOnline(a.consultation_mode) ? 'Paid' : 'Payment', state: paid ? 'done' : 'current' },
+    { key: 'confirmed', label: 'Doctor confirmed', state: confirmed ? 'done' : paid ? 'current' : 'upcoming' },
+    { key: 'consult', label: 'Consultation', state: done ? 'done' : inCall ? 'current' : 'upcoming' },
   ]
-  return steps as { key: string; label: string; state: StepState }[]
-}
-
-export function minutesUntilJoin(scheduledAt: string): number | null {
-  const start = new Date(scheduledAt).getTime() - 15 * 60 * 1000
-  return Math.round((start - Date.now()) / 60000)
-}
-
-export function joinCountdownLabel(scheduledAt: string, canJoin: boolean): string | null {
-  if (canJoin) return 'Join now'
-  const mins = minutesUntilJoin(scheduledAt)
-  if (mins === null) return null
-  if (mins <= 0) return 'Join opens soon'
-  if (mins < 60) return `Join opens in ${mins} min`
-  const hrs = Math.floor(mins / 60)
-  return `Join opens in ${hrs}h ${mins % 60}m`
 }
 
 export const SYMPTOM_SUGGESTIONS = ['Fever', 'Headache', 'Cough', 'Fatigue', 'Stomach pain', 'Skin issue', 'Other']
