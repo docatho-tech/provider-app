@@ -84,11 +84,18 @@ const Profile = () => {
                   {isDoctor && (
                     <PrimaryButton className='!h-[50px]' title='Doctor Practice Settings' onPress={() => router.push('/doctor/profile')} />
                   )}
+                  {isDoctor && (
+                    <PrimaryButton className='!h-[50px]' title='My Earnings' onPress={() => router.push('/earnings' as RelativePathString)} />
+                  )}
+                  {/* A doctor's catalogue is their fee card and lives in their
+                      own tab; a lab's and a pharmacy's is a priced list of
+                      tests or medicines, which is this screen. */}
+                  {!isDoctor && (
+                    <PrimaryButton className='!h-[50px]' title='Catalog' onPress={() => router.push('/catalog' as RelativePathString)} />
+                  )}
+                  <PrimaryButton className='!h-[50px]' title='Insights' onPress={() => router.push('/insights' as RelativePathString)} />
                   {isChemist && (
-                    <>
-                      <PrimaryButton className='!h-[50px]' title='View Earnings' onPress={() => router.push('/earnings' as RelativePathString)} />
-                      <PrimaryButton className='!h-[50px]' title='Bank & Payout Details' onPress={() => router.push('/bank' as RelativePathString)} />
-                    </>
+                    <PrimaryButton className='!h-[50px]' title='Bank & Payout Details' onPress={() => router.push('/bank' as RelativePathString)} />
                   )}
 
                   <PrimaryButton className='!h-[50px]' title='Update Profile' onPress={handleSubmit}
