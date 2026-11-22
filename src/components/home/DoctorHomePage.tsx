@@ -1,101 +1,125 @@
-import PrimaryButton from '@/components/common/PrimaryButton'
 import ThemedText from '@/components/common/ThemedText'
-import StatusBadge from '@/components/healthcare/StatusBadge'
+import { Card, CardSection } from '@/components/ui/Card'
+import { CardLinkRow, EmptyRow, OverviewCard, PersonRow } from '@/components/ui/Lists'
+import { SearchField } from '@/components/ui/Primitives'
 import { API_ENDPOINTS } from '@/constants/APIEndpoints'
 import { Colors } from '@/constants/Colors'
 import useAxios from '@/hooks/useAxios'
-import { formatSlotLabel } from '@/utils/appointmentUi'
+import { ProviderAppointment } from '@/interfaces/healthcare'
+import {
+  appointmentModeIcon,
+  appointmentModeLabel,
+  isOpenAppointment,
+  matchesQuery,
+} from '@/utils/appointmentUi'
+import { dayLabel, daysFromToday, patientMetaShort, timeLabel } from '@/utils/schedule'
+import Feather from '@expo/vector-icons/Feather'
 import { RelativePathString, useRouter } from 'expo-router'
-import React, { useEffect, useMemo } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, View } from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, RefreshControl, ScrollView } from 'react-native'
 
-interface Appointment {
-  id: number
-  patient_name?: string
-  scheduled_at: string
-  status: string
-  consultation_mode: string
-  payment_status?: string
-  symptoms?: string
-}
-
-const canJoin = (a: Appointment) => (
-  a.consultation_mode === 'online'
-  && a.payment_status === 'paid'
-  && ['confirmed', 'in_progress'].includes(a.status)
-)
-
+/**
+ * The doctor's dashboard: what is happening today, what is coming, and a way
+ * into the full list. It deliberately shows only the first three of each — the
+ * "View all Appointments" row is the way to the rest.
+ */
 export default function DoctorHomePage() {
   const router = useRouter()
-  const [refreshing, setRefreshing] = React.useState(false)
-  const { requestGET, response, isLoading } = useAxios<Appointment[]>(API_ENDPOINTS.APPOINTMENTS)
-  const load = () => requestGET()
-  useEffect(() => { load() }, [])
-  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false) }
+  const [refreshing, setRefreshing] = useState(false)
+  const [query, setQuery] = useState('')
+  const { requestGET, response, isLoading } = useAxios<ProviderAppointment[]>(API_ENDPOINTS.APPOINTMENTS)
 
-  const { pendingToday, confirmedToday, nextAppointment } = useMemo(() => {
-    const today = new Date().toDateString()
-    const appointments = response ?? []
-    const isToday = (date: string) => new Date(date).toDateString() === today
-    const upcoming = appointments
-      .filter((a) => !['completed', 'cancelled', 'rejected'].includes(a.status))
+  useEffect(() => { requestGET() }, [])
+  const onRefresh = async () => { setRefreshing(true); await requestGET(); setRefreshing(false) }
+
+  const { today, upcoming } = useMemo(() => {
+    const open = (response ?? [])
+      .filter((a) => isOpenAppointment(a.status))
+      .filter((a) => matchesQuery(a, query))
       .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
     return {
-      pendingToday: appointments.filter((a) => a.status === 'pending' && isToday(a.scheduled_at)).length,
-      confirmedToday: appointments.filter(
-        (a) => ['confirmed', 'in_progress'].includes(a.status) && isToday(a.scheduled_at),
-      ).length,
-      nextAppointment: upcoming[0] ?? null,
+      today: open.filter((a) => daysFromToday(a.scheduled_at) === 0),
+      upcoming: open.filter((a) => daysFromToday(a.scheduled_at) > 0),
     }
-  }, [response])
+  }, [response, query])
 
-  if (isLoading) return <ActivityIndicator className='mt-[40px]' color={Colors.primary} />
+  const openDetail = (appointment: ProviderAppointment) => router.push({
+    pathname: '/appointments/[appointmentId]' as RelativePathString,
+    params: { appointmentId: String(appointment.id) },
+  })
+
+  if (isLoading && !response) return <ActivityIndicator className='mt-[40px]' color={Colors.primary} />
 
   return (
-    <ScrollView className='flex-1 bg-[#F7F9FC] px-[5%] pt-[20px]' refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}>
-      <ThemedText size='heading' className='font-semibold'>Today&apos;s overview</ThemedText>
-      <View className='flex-row gap-[12px] mt-[16px]'>
-        <View className='flex-1 bg-white rounded-[12px] p-[16px] border border-primary/10'>
-          <ThemedText size='heading' className='font-semibold text-primary'>{pendingToday}</ThemedText>
-          <ThemedText size='small' className='text-secondaryTextColor mt-[4px]'>Pending requests</ThemedText>
-        </View>
-        <View className='flex-1 bg-white rounded-[12px] p-[16px] border border-primary/10'>
-          <ThemedText size='heading' className='font-semibold text-primary'>{confirmedToday}</ThemedText>
-          <ThemedText size='small' className='text-secondaryTextColor mt-[4px]'>Confirmed today</ThemedText>
-        </View>
-      </View>
+    <ScrollView
+      className='flex-1 bg-page'
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 24, gap: 16 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+    >
+      <SearchField value={query} onChangeText={setQuery} />
 
-      {nextAppointment ? (
-        <View className='bg-white rounded-[12px] p-[16px] mt-[16px] border border-primary/10'>
-          <ThemedText size='small' className='text-secondaryTextColor'>Next patient</ThemedText>
-          <ThemedText className='font-semibold mt-[4px]'>{nextAppointment.patient_name || 'Patient'}</ThemedText>
-          <ThemedText size='small' className='text-secondaryTextColor mt-[4px]'>{formatSlotLabel(nextAppointment.scheduled_at)}</ThemedText>
-          {nextAppointment.symptoms ? <ThemedText size='small' className='text-secondaryTextColor mt-[4px]' numberOfLines={2}>Symptoms: {nextAppointment.symptoms}</ThemedText> : null}
-          <View className='mt-[8px]'><StatusBadge status={nextAppointment.status} /></View>
-          {canJoin(nextAppointment) ? (
-            <PrimaryButton
-              title='Join video consultation'
-              className='mt-[12px]'
-              onPress={() => router.push({
-                pathname: '/appointments/[appointmentId]/video' as RelativePathString,
-                params: {
-                  appointmentId: String(nextAppointment.id),
-                  patientName: nextAppointment.patient_name || 'Patient',
-                  scheduledAt: nextAppointment.scheduled_at,
-                },
-              })}
-            />
-          ) : (
-            <Pressable className='mt-[12px]' onPress={() => router.push('/appointments')}>
-              <ThemedText className='text-primary font-semibold'>View appointment →</ThemedText>
-            </Pressable>
-          )}
-        </View>
-      ) : null}
+      <OverviewCard
+        title='Appointments  Overview'
+        left={{ value: today.length, label: "Today's" }}
+        right={{ value: upcoming.length, label: 'Upcoming' }}
+        alertRight
+      />
 
-      <View className='mt-[24px]'>
-        <PrimaryButton title='View all appointments' onPress={() => router.push('/appointments')} />
-      </View>
+      <Card>
+        <CardSection
+          icon={<Feather name='calendar' size={16} color={Colors.primaryTextColor} />}
+          title="Today's Appointments"
+        />
+        {today.length === 0 ? (
+          <EmptyRow text='Nothing booked for today' />
+        ) : today.slice(0, 3).map((appointment, index) => (
+          <AppointmentRow
+            key={appointment.id}
+            appointment={appointment}
+            first={index === 0}
+            onPress={() => openDetail(appointment)}
+          />
+        ))}
+        <CardLinkRow label='View all Appointments' onPress={() => router.push('/appointments')} />
+      </Card>
+
+      <Card>
+        <CardSection
+          icon={<Feather name='calendar' size={16} color={Colors.primaryTextColor} />}
+          title='Upcoming Appointments'
+        />
+        {upcoming.length === 0 ? (
+          <EmptyRow text='Nothing coming up' />
+        ) : upcoming.slice(0, 3).map((appointment, index) => (
+          <AppointmentRow
+            key={appointment.id}
+            appointment={appointment}
+            first={index === 0}
+            onPress={() => openDetail(appointment)}
+          />
+        ))}
+      </Card>
     </ScrollView>
   )
 }
+
+export const AppointmentRow = ({ appointment, first, onPress }: {
+  appointment: ProviderAppointment
+  first?: boolean
+  onPress: () => void
+}) => (
+  <PersonRow
+    first={first}
+    icon={appointmentModeIcon(appointment.consultation_mode)}
+    name={appointment.patient_name || 'Patient'}
+    meta={patientMetaShort(appointment.patient_age, appointment.patient_gender)}
+    subtitle={(
+      <ThemedText size='small' style={{ color: Colors.secondaryTextColor }}>
+        {appointmentModeLabel(appointment.consultation_mode)}
+      </ThemedText>
+    )}
+    day={dayLabel(appointment.scheduled_at)}
+    time={timeLabel(appointment.scheduled_at)}
+    onPress={onPress}
+  />
+)

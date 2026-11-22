@@ -1,178 +1,127 @@
-import PrimaryButton from '@/components/common/PrimaryButton'
-import ThemedText from '@/components/common/ThemedText'
-import AppointmentStatusStepper from '@/components/healthcare/AppointmentStatusStepper'
-import StatusBadge from '@/components/healthcare/StatusBadge'
+import { ScreenHeader } from '@/components/layout/Headers'
+import { Card, CardSection } from '@/components/ui/Card'
+import { EmptyRow, OverviewCard } from '@/components/ui/Lists'
+import { SearchField } from '@/components/ui/Primitives'
+import SegmentedTabs from '@/components/ui/SegmentedTabs'
+import { AppointmentRow } from '@/components/home/DoctorHomePage'
 import { API_ENDPOINTS } from '@/constants/APIEndpoints'
 import { Colors } from '@/constants/Colors'
 import useAxios from '@/hooks/useAxios'
-import { formatSlotLabel } from '@/utils/appointmentUi'
+import { ProviderAppointment } from '@/interfaces/healthcare'
+import { isOnline, isOpenAppointment, matchesQuery } from '@/utils/appointmentUi'
+import { groupByDay } from '@/utils/schedule'
+import Feather from '@expo/vector-icons/Feather'
 import { RelativePathString, useRouter } from 'expo-router'
-import React, { useEffect, useState } from 'react'
-import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, TextInput, View } from 'react-native'
+import React, { useEffect, useMemo, useState } from 'react'
+import { ActivityIndicator, RefreshControl, ScrollView, View } from 'react-native'
 
-interface Appointment {
-  id: number
-  patient_name?: string
-  scheduled_at: string
-  status: string
-  consultation_mode: string
-  symptoms: string
-  notes?: string
-  prescription_notes?: string
-  fee?: string
-  payment_status?: string
-}
-
-const TABS = ['pending', 'confirmed', 'completed'] as const
-
-const canJoinVideoConsultation = (appointment: Appointment) => (
-  appointment.consultation_mode === 'online'
-  && appointment.payment_status === 'paid'
-  && ['confirmed', 'in_progress'].includes(appointment.status)
-)
-
+/**
+ * Every open appointment, grouped into one card per day.
+ *
+ * The grouping is the screen: a flat list sorted by time reads the same whether
+ * the next row is in ten minutes or next Tuesday, which is the one thing a
+ * doctor checking their day needs to be able to tell apart.
+ */
 const AppointmentsTab = () => {
   const router = useRouter()
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [tab, setTab] = useState<(typeof TABS)[number]>('pending')
-  const [notesId, setNotesId] = useState<number | null>(null)
-  const [notes, setNotes] = useState('')
   const [refreshing, setRefreshing] = useState(false)
-  const { requestGET, isLoading, error } = useAxios<Appointment[]>(API_ENDPOINTS.APPOINTMENTS)
-  const { requestPATCH } = useAxios(API_ENDPOINTS.APPOINTMENTS)
+  const [query, setQuery] = useState('')
+  const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming')
+  const { requestGET, response, isLoading, error } = useAxios<ProviderAppointment[]>(API_ENDPOINTS.APPOINTMENTS)
 
-  const load = () => requestGET().then((r) => { if (r.status === 200) setAppointments(r.data) })
-  useEffect(() => { load() }, [])
+  useEffect(() => { requestGET() }, [])
+  const onRefresh = async () => { setRefreshing(true); await requestGET(); setRefreshing(false) }
 
-  const onRefresh = async () => {
-    setRefreshing(true)
-    await load()
-    setRefreshing(false)
-  }
-
-  const openDetail = (a: Appointment) => {
-    router.push({
-      pathname: '/appointments/[appointmentId]' as RelativePathString,
-      params: {
-        appointmentId: String(a.id),
-        patient_name: a.patient_name || 'Patient',
-        scheduled_at: a.scheduled_at,
-        status: a.status,
-        consultation_mode: a.consultation_mode,
-        symptoms: a.symptoms || '',
-        notes: a.notes || '',
-        prescription_notes: a.prescription_notes || '',
-        fee: a.fee || '',
-        payment_status: a.payment_status || '',
-      },
-    })
-  }
-
-  const joinVideo = (a: Appointment) => {
-    router.push({
-      pathname: '/appointments/[appointmentId]/video' as RelativePathString,
-      params: {
-        appointmentId: String(a.id),
-        patientName: a.patient_name || 'Patient',
-        scheduledAt: a.scheduled_at,
-      },
-    })
-  }
-
-  const confirmUpdate = (id: number, status: string, prescription_notes?: string) => {
-    if (status === 'rejected') {
-      Alert.alert('Reject appointment?', 'The patient will be notified.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Reject', style: 'destructive', onPress: () => updateStatus(id, status, prescription_notes) },
-      ])
-      return
+  const { groups, inClinic, online, openCount, pastCount } = useMemo(() => {
+    const all = response ?? []
+    // Newest first for what has already happened: a doctor opening Past is
+    // looking for the consultation they just finished, not their first ever.
+    const rows = all
+      .filter((a) => (tab === 'upcoming' ? isOpenAppointment(a.status) : !isOpenAppointment(a.status)))
+      .filter((a) => matchesQuery(a, query))
+      .sort((a, b) => {
+        const diff = new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
+        return tab === 'upcoming' ? diff : -diff
+      })
+    return {
+      groups: groupByDay(rows, (a) => a.scheduled_at),
+      inClinic: rows.filter((a) => !isOnline(a.consultation_mode)).length,
+      online: rows.filter((a) => isOnline(a.consultation_mode)).length,
+      openCount: all.filter((a) => isOpenAppointment(a.status)).length,
+      pastCount: all.filter((a) => !isOpenAppointment(a.status)).length,
     }
-    if (status === 'confirmed') {
-      Alert.alert('Accept appointment?', 'Confirm this consultation slot.', [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Accept', onPress: () => updateStatus(id, status, prescription_notes) },
-      ])
-      return
-    }
-    updateStatus(id, status, prescription_notes)
-  }
-  const updateStatus = async (id: number, status: string, prescription_notes?: string) => {
-    const body: Record<string, unknown> = { appointment_id: id, status }
-    if (prescription_notes !== undefined) body.prescription_notes = prescription_notes
-    await requestPATCH(body)
-    setNotesId(null)
-    setNotes('')
-    load()
-  }
+  }, [response, query, tab])
 
-  const filtered = appointments.filter((a) => {
-    if (tab === 'completed') return a.status === 'completed'
-    if (tab === 'confirmed') return ['confirmed', 'in_progress'].includes(a.status)
-    return a.status === 'pending'
+  const openDetail = (appointment: ProviderAppointment) => router.push({
+    pathname: '/appointments/[appointmentId]' as RelativePathString,
+    params: { appointmentId: String(appointment.id) },
   })
 
-  if (isLoading && appointments.length === 0) return <ActivityIndicator className='mt-[40px]' color={Colors.primary} />
-
   return (
-    <ScrollView className='flex-1 bg-[#F7F9FC] px-[5%] pt-[10px]'
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}>
-      <View className='flex-row gap-[8px] mb-[12px]'>
-        {TABS.map((t) => (
-          <Pressable key={t} className={`px-[12px] py-[6px] rounded-full ${tab === t ? 'bg-primary' : 'bg-white border border-primary/20'}`} onPress={() => setTab(t)}>
-            <ThemedText size='small' className={tab === t ? 'text-white capitalize' : 'capitalize'}>{t}</ThemedText>
-          </Pressable>
-        ))}
-      </View>
-      {error && filtered.length === 0 ? (
-        <ThemedText className='text-center text-secondaryTextColor mt-[40px]'>Could not load appointments. Pull to refresh.</ThemedText>
-      ) : filtered.length === 0 ? (
-        <ThemedText className='text-center text-secondaryTextColor mt-[40px]'>No appointments</ThemedText>
-      ) : filtered.map((a) => (
-        <View key={a.id} className='bg-white rounded-[12px] p-[14px] mt-[10px] border border-primary/10'>
-          <Pressable onPress={() => openDetail(a)}>
-            <View className='flex-row justify-between items-start'>
-              <View className='flex-1'>
-                <ThemedText className='font-semibold'>{a.patient_name || 'Patient'}</ThemedText>
-                <ThemedText size='small' className='text-secondaryTextColor mt-[4px]'>{formatSlotLabel(a.scheduled_at)}</ThemedText>
-              </View>
-              <StatusBadge status={a.status} />
-            </View>
-            <ThemedText size='small' className='capitalize mt-[8px] text-primary'>{a.consultation_mode.replace('_', ' ')}</ThemedText>
-            {a.payment_status ? (
-              <ThemedText size='small' className='mt-[4px] text-secondaryTextColor capitalize'>Payment: {a.payment_status.replace('_', ' ')}</ThemedText>
-            ) : null}
-            <AppointmentStatusStepper appointment={{ status: a.status, payment_status: a.payment_status, consultation_mode: a.consultation_mode }} />
-            {a.symptoms ? <ThemedText size='small' className='mt-[4px] text-secondaryTextColor' numberOfLines={2}>Symptoms: {a.symptoms}</ThemedText> : null}
-          </Pressable>
-          {canJoinVideoConsultation(a) ? (
-            <View className='mt-[12px] bg-[#EEF4FF] rounded-[10px] p-[10px] border border-primary/20'>
-              <ThemedText size='small' className='text-primary font-semibold mb-[8px]'>Video consultation ready</ThemedText>
-              <PrimaryButton title='Join now' onPress={() => joinVideo(a)} />
-            </View>
-          ) : null}
-          {a.status === 'pending' && (
-            <View className='flex-row gap-[8px] mt-[10px]'>
-              <PrimaryButton title='Accept' className='flex-1' onPress={() => confirmUpdate(a.id, 'confirmed')} />
-              <Pressable className='flex-1 border border-red-300 rounded-default items-center justify-center' onPress={() => confirmUpdate(a.id, 'rejected')}>
-                <ThemedText className='text-red-500'>Reject</ThemedText>
-              </Pressable>
-            </View>
-          )}
-          {['confirmed', 'in_progress'].includes(a.status) && (
-            <View className='mt-[10px] gap-[8px]'>
-              {notesId === a.id ? (
-                <>
-                  <TextInput className='border border-primary/20 rounded-[8px] p-[10px] min-h-[60px]' multiline value={notes} onChangeText={setNotes} placeholder='Prescription notes' />
-                  <PrimaryButton title='Mark Complete' onPress={() => updateStatus(a.id, 'completed', notes)} />
-                </>
-              ) : (
-                <PrimaryButton title='Add Rx & Complete' onPress={() => { setNotesId(a.id); setNotes(a.prescription_notes || '') }} />
-              )}
-            </View>
-          )}
-        </View>
-      ))}
-    </ScrollView>
+    <View className='flex-1 bg-page'>
+      <ScreenHeader title='All Appointments' backButtonRoute='/' />
+      {isLoading && !response ? (
+        <ActivityIndicator className='mt-[40px]' color={Colors.primary} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 16 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
+        >
+          <SearchField value={query} onChangeText={setQuery} />
+
+          <SegmentedTabs
+            tabs={[
+              { label: 'Upcoming', value: 'upcoming', count: openCount },
+              { label: 'Past', value: 'past', count: pastCount },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as 'upcoming' | 'past')}
+          />
+
+          <OverviewCard
+            title='Appointments  Overview'
+            left={{
+              value: inClinic,
+              label: 'In-Clinic visits',
+              icon: <Feather name='home' size={14} color={Colors.primary} />,
+            }}
+            right={{
+              value: online,
+              label: 'Online Consult.',
+              icon: <Feather name='video' size={14} color={Colors.primary} />,
+            }}
+          />
+
+          {groups.length === 0 ? (
+            <Card>
+              <CardSection
+                icon={<Feather name='calendar' size={16} color={Colors.primaryTextColor} />}
+                title='Appointments'
+              />
+              <EmptyRow text={error
+                ? 'Could not load appointments. Pull to refresh.'
+                : tab === 'past' ? 'No past appointments' : 'No appointments'} />
+            </Card>
+          ) : groups.map((group) => (
+            <Card key={group.label}>
+              <CardSection
+                icon={<Feather name='calendar' size={16} color={Colors.primaryTextColor} />}
+                title={`${group.label} (${group.rows.length})`}
+              />
+              {group.rows.map((appointment, index) => (
+                <AppointmentRow
+                  key={appointment.id}
+                  appointment={appointment}
+                  first={index === 0}
+                  onPress={() => openDetail(appointment)}
+                />
+              ))}
+            </Card>
+          ))}
+        </ScrollView>
+      )}
+    </View>
   )
 }
+
 export default AppointmentsTab

@@ -41,11 +41,22 @@ export const getNextPageNumberFromURL = (nextPageURL : string) : number | null =
   return page ? Number(page) : null;
 }
 
-export const getFormattedPrice = (price: number): string => {
+/**
+ * `₹2,313` by default, which is how the list rows write money.
+ *
+ * The two options are the other two forms the design uses: a headline figure
+ * always carries its paise (`₹12,300.00`), and the Insights cards drop the
+ * symbol entirely because the card title already says what the number is.
+ */
+export const getFormattedPrice = (
+  price: number,
+  options: { symbol?: boolean; decimals?: 0 | 2 } = {},
+): string => {
+  const { symbol = true, decimals } = options;
   return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
+    style: symbol ? 'currency' : 'decimal',
     currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2
+    minimumFractionDigits: decimals ?? (symbol ? 0 : 2),
+    maximumFractionDigits: decimals ?? 2
   }).format(price);
 }

@@ -51,6 +51,10 @@ android/keystores/debug.keystore
 expo-env.d.ts
 # @end expo-cli
 
+# Plain `.env` was missing here while every other variant was listed, so the
+# file holding the live Razorpay key was one `git add .` from being committed.
+# `.env.example` is unaffected — this pattern matches `.env` exactly.
+.env
 .env.local
 .env.development
 .env.production

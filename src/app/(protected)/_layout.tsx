@@ -2,13 +2,17 @@ import { API_ENDPOINTS } from '@/constants/APIEndpoints';
 import { AuthContext } from '@/contexts/authenticationContext';
 import useAxios from '@/hooks/useAxios';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
-import { Redirect, Stack } from 'expo-router';
+import { openNotification } from '@/utils/notificationRoute';
+import { Redirect, Stack, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect } from 'react';
 import { Platform } from 'react-native';
 
 export default function ProtectedRootLayout() {
   const { isLoggedIn, isReady } = useContext(AuthContext);
-  const { pushToken } = usePushNotifications();
+  const router = useRouter();
+  const { pushToken } = usePushNotifications(
+    useCallback((data: Record<string, unknown>) => openNotification(router, data), [router]),
+  );
   const { requestPOST: registerDeviceToken } = useAxios(API_ENDPOINTS.DEVICE_TOKEN);
 
   const sendNotificationTokenToServer = useCallback(async () => {
