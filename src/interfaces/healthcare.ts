@@ -27,8 +27,21 @@ export interface ProviderAppointment {
   prescription_notes?: string
   can_join_video?: boolean
   requires_payment?: boolean
+  cancellation_reason?: string
   previous_consultations?: PreviousConsultation[]
   prescription?: AppointmentPrescription | null
+}
+
+/** One row of the doctor↔patient thread attached to an appointment. */
+export interface ConsultationMessage {
+  id: number
+  kind: 'text' | 'file' | 'missed_call' | 'system'
+  body: string
+  attachment_url?: string | null
+  attachment_name?: string | null
+  sender_name?: string
+  is_from_patient: boolean
+  created_at: string
 }
 
 export interface PrescribedMedication {

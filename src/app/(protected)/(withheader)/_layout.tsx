@@ -45,6 +45,9 @@ const WithHeaderLayout = () => (
         options={{ headerShown: true, header: () => <ScreenHeader title="Notifications" backButtonRoute="/" /> }}
       />
       <Stack.Screen name="appointments/[appointmentId]/prescription" options={{ headerShown: false }} />
+      {/* The patient's name is in the route params, so this one draws its own
+          header too. */}
+      <Stack.Screen name="appointments/[appointmentId]/chat" options={{ headerShown: false }} />
       <Stack.Screen
         name="appointments/[appointmentId]/video"
         options={{ headerShown: true, header: () => <ScreenHeader title="Video Consultation" backButtonRoute="/appointments" /> }}

@@ -21,9 +21,16 @@ import { useNow } from '@/hooks/useNow'
 import Feather from '@expo/vector-icons/Feather'
 import { RelativePathString, useLocalSearchParams, useRouter } from 'expo-router'
 import React, { useEffect, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native'
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, View } from 'react-native'
 import Toast from 'react-native-toast-message'
 import { replaceUrlParams } from '@/utils/base'
+
+const STATUS_TOAST: Record<string, string> = {
+  rejected: 'Appointment rejected',
+  confirmed: 'Appointment accepted',
+  completed: 'Appointment completed',
+  cancelled: 'Appointment cancelled',
+}
 
 /**
  * One appointment, in whichever of its three states it is in.
@@ -46,15 +53,54 @@ const AppointmentDetail = () => {
 
   useEffect(() => { requestGET() }, [appointmentId])
 
-  const updateStatus = async (status: string) => {
+  const updateStatus = async (status: string, cancellationReason?: string) => {
     setUpdating(true)
-    const res = await requestPATCH({ appointment_id: Number(appointmentId), status })
+    const res = await requestPATCH({
+      appointment_id: Number(appointmentId),
+      status,
+      ...(cancellationReason ? { cancellation_reason: cancellationReason } : {}),
+    })
     setUpdating(false)
     if (res.status === 200) {
-      Toast.show({ type: 'success', text1: status === 'rejected' ? 'Appointment rejected' : 'Appointment accepted' })
+      Toast.show({ type: 'success', text1: STATUS_TOAST[status] ?? 'Appointment updated' })
       requestGET()
+      return
     }
+    // Without this the footer just stops: the button settles and nothing moves,
+    // which reads as "it worked".
+    Toast.show({ type: 'error', text1: 'Could not update the appointment', text2: 'Please try again.' })
   }
+
+  // Completing is what pays the doctor and lets the patient rate, and it cannot
+  // be undone from the app, so it asks first.
+  const confirmCompleted = () => Alert.alert(
+    'Mark as completed?',
+    'Only do this once you have seen the patient. This closes the appointment.',
+    [
+      { text: 'Not yet', style: 'cancel' },
+      { text: 'Mark completed', onPress: () => updateStatus('completed') },
+    ],
+  )
+
+  // There is one `cancelled` status for both of these, so the reason is the
+  // only thing that tells a no-show apart from a doctor calling in sick — and
+  // the two differ on whether the patient is owed their money back.
+  const confirmCancel = () => Alert.alert(
+    'Cancel this appointment?',
+    'The patient is told straight away. This cannot be undone from the app.',
+    [
+      { text: 'Keep it', style: 'cancel' },
+      {
+        text: 'Patient did not show',
+        onPress: () => updateStatus('cancelled', 'Patient did not show up'),
+      },
+      {
+        text: 'I cannot take it',
+        style: 'destructive',
+        onPress: () => updateStatus('cancelled', 'Cancelled by doctor'),
+      },
+    ],
+  )
 
   if (isLoading && !appointment) {
     return (
@@ -95,6 +141,19 @@ const AppointmentDetail = () => {
   // is under way and stays afterwards — a doctor who hung up without writing it
   // still has to be able to.
   const consulted = appointment.status === 'in_progress' || appointment.status === 'completed'
+
+  // Nothing closes an in-clinic visit or a home visit on its own: ending the
+  // video call is the only automatic completion and neither has one, so without
+  // this button they sit `confirmed` forever — no earnings line, and the patient
+  // can never rate.
+  const needsManualClose = !isOnline(appointment.consultation_mode)
+    && (appointment.status === 'confirmed' || appointment.status === 'in_progress')
+  // Pending already has Reject in the footer, and nothing closed is cancellable.
+  const cancellable = appointment.status === 'confirmed' || appointment.status === 'in_progress'
+  const openChat = () => router.push({
+    pathname: '/appointments/[appointmentId]/chat' as RelativePathString,
+    params: { appointmentId: String(appointment.id), patientName: appointment.patient_name || 'Patient' },
+  })
   const openPrescription = () => router.push({
     pathname: '/appointments/[appointmentId]/prescription' as RelativePathString,
     params: { appointmentId: String(appointment.id) },
@@ -173,7 +232,29 @@ const AppointmentDetail = () => {
               onPress={appointment.patient_address ? navigate : undefined}
             />
           </CardRow>
+          <CardRow>
+            <ContactLine
+              label='Messages'
+              value='Chat about this consultation'
+              icon={<Feather name='message-square' size={16} color={Colors.primary} />}
+              onPress={openChat}
+            />
+          </CardRow>
         </Card>
+
+        {appointment.cancellation_reason ? (
+          <Card>
+            <CardSection
+              icon={<Feather name='x-circle' size={15} color={Colors.primaryTextColor} />}
+              title='Cancelled'
+            />
+            <CardRow first>
+              <ThemedText size='small' style={{ color: Colors.secondaryTextColor }}>
+                {appointment.cancellation_reason}
+              </ThemedText>
+            </CardRow>
+          </Card>
+        ) : null}
 
         {isPending ? (
           <Card>
@@ -220,6 +301,17 @@ const AppointmentDetail = () => {
             ))}
           </Card>
         ) : null}
+
+        {/* Kept out of the sticky footer on purpose: cancelling sits below the
+            appointment, not beside Join Consultation, where a missed tap costs
+            the patient their slot. */}
+        {cancellable ? (
+          <Pressable onPress={confirmCancel} disabled={updating} className='items-center py-[12px]'>
+            <ThemedText size='small' className='font-semibold' style={{ color: Colors.danger }}>
+              Cancel appointment
+            </ThemedText>
+          </Pressable>
+        ) : null}
       </ScrollView>
 
       <StickyFooter bottomInset={bottom}>
@@ -230,6 +322,21 @@ const AppointmentDetail = () => {
             </View>
             <View className='flex-1'>
               <ActionButton title='Accept' tone='primary' loading={updating} onPress={() => updateStatus('confirmed')} />
+            </View>
+          </>
+        ) : needsManualClose ? (
+          <>
+            {consulted ? (
+              <View className='flex-1'>
+                <ActionButton
+                  title={appointment.prescription ? 'View Prescription' : 'Write Prescription'}
+                  tone='outlinePrimary'
+                  onPress={openPrescription}
+                />
+              </View>
+            ) : null}
+            <View className='flex-1'>
+              <ActionButton title='Mark completed' tone='primary' loading={updating} onPress={confirmCompleted} />
             </View>
           </>
         ) : consulted ? (

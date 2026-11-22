@@ -17,13 +17,16 @@ export const API_ENDPOINTS = Object.freeze({
     APPOINTMENTS: '/api/healthcare/provider/appointments/',
     APPOINTMENT_DETAIL: '/api/healthcare/provider/appointments/:appointmentId/',
     APPOINTMENT_VIDEO_TOKEN: '/api/healthcare/provider/appointments/:appointmentId/video-token/',
+    APPOINTMENT_VIDEO_END: '/api/healthcare/provider/appointments/:appointmentId/video-end/',
     APPOINTMENT_PRESCRIPTION: '/api/healthcare/provider/appointments/:appointmentId/prescription/',
+    APPOINTMENT_MESSAGES: '/api/healthcare/appointments/:appointmentId/messages/',
 
     DIAGNOSTIC_BOOKINGS: '/api/healthcare/provider/diagnostic-bookings/',
     DIAGNOSTIC_BOOKING_DETAIL: '/api/healthcare/provider/diagnostic-bookings/:bookingId/',
     UPLOADS: '/api/uploads/',
     DOCTOR_PROFILE: '/api/healthcare/provider/doctor-profile/',
     AVAILABILITY: '/api/healthcare/provider/availability/',
+    BLOCKED_DATES: '/api/healthcare/provider/blocked-dates/',
 
     GET_PROFILE_PROVIDER: '/api/providers/profile/',
     DEVICE_TOKEN: '/api/device-tokens/',

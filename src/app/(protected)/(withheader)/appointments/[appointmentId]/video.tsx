@@ -29,6 +29,10 @@ const ProviderVideoConsultationLobby = () => {
   const [joining, setJoining] = useState(false)
   const videoTokenUrl = replaceUrlParams(API_ENDPOINTS.APPOINTMENT_VIDEO_TOKEN, { appointmentId })
   const { requestPOST } = useAxios<iVideoTokenResponse>(videoTokenUrl, true)
+  // The doctor leaving is what ends the consultation — nothing else completes
+  // it, and an appointment left in_progress can never be rated by the patient.
+  const videoEndUrl = replaceUrlParams(API_ENDPOINTS.APPOINTMENT_VIDEO_END, { appointmentId })
+  const { requestPOST: endCall } = useAxios(videoEndUrl, true)
 
   const joinCall = async () => {
     setJoining(true)
@@ -44,10 +48,15 @@ const ProviderVideoConsultationLobby = () => {
         authToken={tokenData.auth_token}
         userName={tokenData.user_name}
         mock={tokenData.mock}
-        onLeave={() => router.replace({
-          pathname: '/appointments/[appointmentId]' as RelativePathString,
-          params: { appointmentId, patient_name: patientName || 'Patient', scheduled_at: scheduledAt || '', status: 'in_progress' },
-        })}
+        onLeave={async () => {
+          // Awaited, so the detail screen's own fetch reads the closed
+          // consultation rather than racing it and showing it still running.
+          await endCall({})
+          router.replace({
+            pathname: '/appointments/[appointmentId]' as RelativePathString,
+            params: { appointmentId, patient_name: patientName || 'Patient', scheduled_at: scheduledAt || '', status: 'completed' },
+          })
+        }}
       />
     )
   }
