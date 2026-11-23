@@ -35,6 +35,14 @@ const ConsultationChat = () => {
   const { bottom } = useCustomSafeAreaInsets()
   const [messages, setMessages] = useState<ConsultationMessage[]>([])
   const [draft, setDraft] = useState('')
+  /*
+   * The API enforces the reply window (open 15 minutes before the slot, closed
+   * a day after it ends) and answers 403. There is deliberately no local clock
+   * check mirroring it — a provider's phone running slow would lock them out of
+   * a consultation that is live on the server. Instead the 403 is shown here,
+   * above the composer, rather than only as a toast that vanishes.
+   */
+  const [closedReason, setClosedReason] = useState<string | null>(null)
   const listRef = useRef<FlatList<ConsultationMessage>>(null)
 
   const url = replaceUrlParams(API_ENDPOINTS.APPOINTMENT_MESSAGES, { appointmentId })
@@ -62,11 +70,17 @@ const ConsultationChat = () => {
       const res = await requestPOST({ kind: 'text', body })
       if (res.status === 201) {
         setMessages((prev) => [...prev, res.data])
+        setClosedReason(null)
         listRef.current?.scrollToEnd({ animated: true })
         return
       }
       setDraft(body)
-    } catch {
+    } catch (e: any) {
+      if (e?.response?.status === 403) {
+        setClosedReason(
+          e.response.data?.detail || 'This consultation is closed to new messages.',
+        )
+      }
       // useAxios already toasted why. Put the text back so it is not lost.
       setDraft(body)
     }
@@ -98,26 +112,41 @@ const ConsultationChat = () => {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View
-          className='flex-row items-end gap-x-[8px] px-[16px] pt-[10px] bg-white border-t border-primary/10'
+          className='px-[16px] pt-[10px] bg-white border-t border-primary/10'
           style={{ paddingBottom: bottom + 10 }}
         >
+          {closedReason ? (
+            <ThemedText
+              size='small'
+              className='mb-[8px] text-center'
+              style={{ color: Colors.mutedTextColor }}
+            >
+              {closedReason}
+            </ThemedText>
+          ) : null}
+          <View className='flex-row items-end gap-x-[8px]'>
           <TextInput
             value={draft}
             onChangeText={setDraft}
-            placeholder='Message the patient'
+            placeholder={closedReason ? 'Messaging is closed' : 'Message the patient'}
             placeholderTextColor={Colors.mutedTextColor}
+            editable={!closedReason}
             multiline
             className='flex-1 max-h-[110px] px-[14px] py-[10px] rounded-[20px] border border-primary/20'
             style={{ color: Colors.primaryTextColor }}
           />
           <Pressable
             onPress={send}
-            disabled={sending || !draft.trim()}
+            disabled={sending || !draft.trim() || !!closedReason}
             className='h-[42px] w-[42px] rounded-full items-center justify-center'
-            style={{ backgroundColor: Colors.primary, opacity: sending || !draft.trim() ? 0.4 : 1 }}
+            style={{
+              backgroundColor: Colors.primary,
+              opacity: sending || !draft.trim() || closedReason ? 0.4 : 1,
+            }}
           >
             <Feather name='send' size={18} color='#FFFFFF' />
           </Pressable>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </View>

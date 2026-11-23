@@ -63,7 +63,10 @@ const BookingDetail = () => {
   const uploadReports = async () => {
     const url = await pickAndUpload()
     if (!url) return
-    await patch({ reports: [url], status: BOOKING_STATUS.REPORT_GENERATED }, 'Report uploaded')
+    // PATCH replaces the whole array, so send the existing reports back with it —
+    // a multi-test booking's second report used to overwrite the first.
+    const reports = [...(booking?.reports ?? []), url]
+    await patch({ reports, status: BOOKING_STATUS.REPORT_GENERATED }, 'Report uploaded')
   }
 
   if (isLoading && !booking) {
